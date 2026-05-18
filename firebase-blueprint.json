@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and subscription metadata",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "plan": { "type": "string", "enum": ["free", "pro", "enterprise"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "plan"]
+    },
+    "Niche": {
+      "title": "Niche Research",
+      "description": "Research data for specific market niches",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "demandScore": { "type": "number" },
+        "competitionScore": { "type": "number" },
+        "painPoints": { "type": "array", "items": { "type": "string" } },
+        "audienceAnalysis": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name"]
+    },
+    "Product": {
+      "title": "Digital Product",
+      "description": "Details of the digital product being sold",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "price": { "type": "number" },
+        "usp": { "type": "string" },
+        "description": { "type": "string" },
+        "nicheId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "price"]
+    },
+    "Offer": {
+      "title": "Sales Offer",
+      "description": "The specific offer or stack for a product",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "headline": { "type": "string" },
+        "bonuses": { "type": "array", "items": { "type": "string" } },
+        "guarantee": { "type": "string" },
+        "scarcity": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId"]
+    },
+    "AdAngle": {
+      "title": "Ad Angle",
+      "description": "Marketing angle for advertising campaigns",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "angleType": { "type": "string" },
+        "hook": { "type": "string" },
+        "headline": { "type": "string" },
+        "bodyText": { "type": "string" },
+        "performanceScore": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "hook"]
+    },
+    "Copy": {
+      "title": "Copywriting",
+      "description": "AI generated copywriting content",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "type": { "type": "string", "enum": ["landing_page", "email", "ads", "whatsapp"] },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "type", "content"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/niches/{nicheId}": {
+      "schema": "Niche",
+      "description": "Market research entries"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Digital products created by users"
+    },
+    "/products/{productId}/offers/{offerId}": {
+      "schema": "Offer",
+      "description": "Offers associated with a product"
+    },
+    "/products/{productId}/angles/{angleId}": {
+      "schema": "AdAngle",
+      "description": "Ad angles for a specific product"
+    },
+    "/products/{productId}/copies/{copyId}": {
+      "schema": "Copy",
+      "description": "Copywriting blocks for a product"
+    }
+  }
+}
