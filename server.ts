@@ -13,33 +13,43 @@ async function startServer() {
   app.use(express.json());
 
   // Gemini API Proxy
-  const genAI = new GoogleGenAI({ 
-    apiKey: process.env.GEMINI_API_KEY!,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
-
   app.post("/api/ai/generate", async (req, res) => {
     try {
       const { prompt, systemInstruction } = req.body;
-      const model = genAI.models.get("gemini-3-flash-preview");
       
-      const response = await ai.models.generateContent({
+      if (!process.env.GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY is not configured in environment variables.");
+      }
+
+      // Lazy init to ensure env vars are loaded
+      const aiClient = new GoogleGenAI({ 
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+      
+      console.log(`[AI Request] Prompt: ${prompt.substring(0, 50)}...`);
+
+      const response = await aiClient.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
-          systemInstruction: systemInstruction || "You are a professional AI Business Assistant specialized in digital marketing and sales funnel optimization.",
+          systemInstruction: systemInstruction || "You are Alco Creative System's AI Business Assistant by Aladzan Corpora. You specialize in digital marketing, sales funnel optimization, and high-converting copywriting. Always provide practical, efficient, and professional advice. Focus on scalable systems and premium brand execution.",
           responseMimeType: "application/json"
         }
       });
       
+      if (!response.text) {
+        throw new Error("AI returned an empty response.");
+      }
+
       res.json({ text: response.text });
     } catch (error: any) {
       console.error("Gemini Error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message || "An error occurred during AI generation." });
     }
   });
 
@@ -67,16 +77,5 @@ async function startServer() {
   });
 }
 
-// Fixed the instantiation based on the skill: Use GoogleGenAI with named apiKey
-// And call ai.models.generateContent directly
-
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY!,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
+// Cleanup removed global ai definition
 startServer().catch(console.error);

@@ -1,125 +1,191 @@
+import React from "react";
 import { motion } from "motion/react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { TrendingUp, Users, Package, Search, ArrowUpRight } from "lucide-react";
-import { auth } from "../lib/firebase";
-
-const stats = [
-  { label: "Niches Explored", value: "12", icon: Search, change: "+3" },
-  { label: "Products Built", value: "4", icon: Package, change: "+1" },
-  { label: "Winning Angles", value: "8", icon: TrendingUp, change: "+2" },
-  { label: "Total Leads", value: "1.2k", icon: Users, change: "+240" },
-];
+import { TrendingUp, Users, Package, Search, ArrowUpRight, Zap, Plus, ChevronRight, Loader2 } from "lucide-react";
+import { auth, db } from "../lib/firebase";
+import { Button } from "../components/ui/button";
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { cn } from "../lib/utils";
+import { useBranding } from "@/contexts/BrandingContext";
 
 export default function Dashboard() {
   const user = auth.currentUser;
+  const navigate = useNavigate();
+  const { config } = useBranding();
+  const [projects, setProjects] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [creating, setCreating] = React.useState(false);
+
+  React.useEffect(() => {
+    const fetchProjects = async () => {
+      if (!user) return;
+      try {
+        const q = query(collection(db, "projects"), where("userId", "==", user.uid));
+        const querySnapshot = await getDocs(q);
+        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setProjects(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProjects();
+  }, [user]);
+
+  const handleCreateProject = async () => {
+    if (!user) return;
+    setCreating(true);
+    try {
+      const name = `Project ${projects.length + 1}`;
+      const docRef = await addDoc(collection(db, "projects"), {
+        userId: user.uid,
+        name: name,
+        currentStep: 1,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      toast.success("Project Identity Initialized");
+      navigate(`/wizard/${docRef.id}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to initialize project");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-10">
-      <header className="flex justify-between items-end">
+    <div className="p-8 max-w-7xl mx-auto space-y-12">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
-          <p className="text-white/40 text-xs font-semibold uppercase tracking-[0.2em] mb-2">Workspace Overview</p>
-          <h1 className="text-4xl font-bold tracking-tight">System Ready, {user?.displayName?.split(' ')[0]}.</h1>
-        </div>
-        <div className="text-right">
-          <p className="text-white/40 text-xs font-semibold uppercase tracking-[0.2em] mb-1">Plan Status</p>
-          <div className="px-3 py-1 bg-white/10 border border-white/10 rounded-full text-[10px] font-bold text-white tracking-widest uppercase">
-            Professional Tier
+          <p className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-3 font-heading">{config.brandName} Ecosystem Entry</p>
+          <h1 className="text-5xl font-heading font-black tracking-tighter text-foreground leading-[1.1]">
+            Greetings, <span className="text-primary">{user?.displayName?.split(' ')[0] || "Strategist"}</span>.
+          </h1>
+          <div className="mt-2 space-y-1">
+            <p className="text-muted-foreground text-lg font-medium opacity-80 italic uppercase">{config.dashboardText}</p>
+            <p className="text-[10px] font-black text-primary/40 uppercase tracking-[0.4em]">{config.tagline}</p>
           </div>
         </div>
+        <Button 
+          disabled={creating}
+          onClick={handleCreateProject}
+          className="h-14 px-8 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center gap-3 uppercase tracking-widest text-xs"
+        >
+          {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+          Start Unified Workflow
+        </Button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, idx) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-          >
-            <Card className="bg-white/[0.03] border-white/5 backdrop-blur-sm overflow-hidden group">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xs font-medium text-white/40 uppercase tracking-wider">
-                  {stat.label}
-                </CardTitle>
-                <stat.icon className="h-4 w-4 text-white/40 group-hover:text-white transition-colors" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold tracking-tight mb-1">{stat.value}</div>
-                <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 uppercase">
-                  <ArrowUpRight className="w-3 h-3" />
-                  {stat.change} this month
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 bg-white/[0.03] border-white/5">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold tracking-tight">Active Funnels</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-                      <Zap className="w-5 h-5 text-white/40" />
+      {/* Grid of Projects */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+        {loading ? (
+           [1, 2, 3].map(i => (
+             <div key={i} className="h-64 bg-secondary/30 rounded-[2.5rem] animate-pulse" />
+           ))
+        ) : (
+          projects.length > 0 ? (
+            projects.map((project, idx) => (
+              <motion.div
+                key={project.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.1 }}
+                onClick={() => navigate(`/wizard/${project.id}`)}
+                className="cursor-pointer group"
+              >
+                <Card className="bg-card border-border shadow-md hover:shadow-2xl transition-all duration-500 rounded-[2.5rem] overflow-hidden border-b-4 border-b-transparent hover:border-b-primary relative">
+                  <CardHeader className="p-8 pb-4 flex flex-row items-center justify-between">
+                    <div className="p-3 bg-secondary rounded-2xl group-hover:bg-primary transition-all duration-300">
+                      <Zap className="h-5 w-5 text-primary group-hover:text-white" />
                     </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Step</span>
+                      <span className="text-xl font-heading font-black text-foreground">{project.currentStep}/8</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-8 pt-4 space-y-6">
                     <div>
-                      <p className="font-medium text-sm">Product Funnel #{i}</p>
-                      <p className="text-[10px] text-white/40 uppercase tracking-widest">Digital Course • Health Niche</p>
+                      <h3 className="text-2xl font-heading font-black tracking-tight text-foreground group-hover:text-primary transition-colors">{project.name}</h3>
+                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] opacity-60 mt-1 truncate">
+                        {project.nicheData?.selectedOption?.name || "Digital Asset Pipeline"}
+                      </p>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold tracking-tight">2.4% CR</p>
-                    <p className="text-[10px] text-emerald-400 font-bold uppercase">Optimized</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white/[0.03] border-white/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-8 opacity-10">
-            <TrendingUp className="w-32 h-32" />
-          </div>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold tracking-tight">AI Agent Center</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div>
-              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Status</p>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/60">Research Agent</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/60">Offer Agent</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/60">Copy Agent</span>
-                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                </div>
+                    <div className="space-y-2">
+                       <div className="flex justify-between items-end">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Completion Progress</span>
+                          <span className="text-sm font-heading font-black text-primary">{Math.round((project.currentStep / 8) * 100)}%</span>
+                       </div>
+                       <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-primary transition-all duration-1000" 
+                            style={{ width: `${(project.currentStep / 8) * 100}%` }}
+                          />
+                       </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="space-y-1">
+                         <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600">Active Syncing</p>
+                         <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-widest truncate">
+                            Updated: {project.updatedAt?.toDate ? project.updatedAt.toDate().toLocaleDateString() : 'Just now'}
+                         </p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-all group-hover:translate-x-1" />
+                    </div>
+  
+                    <div className="grid grid-cols-2 gap-3 pt-4 border-t border-border/50">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/wizard/${project.id}?mode=strategy`);
+                        }}
+                        className="h-10 text-[9px] font-black uppercase tracking-widest border-border/50 hover:bg-primary/10 hover:text-primary transition-all"
+                      >
+                        1. Sales Strategy
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        disabled={project.currentStep < 8}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/wizard/${project.id}?mode=ads`);
+                        }}
+                        className="h-10 text-[9px] font-black uppercase tracking-widest border-border/50 hover:bg-primary/10 hover:text-primary transition-all"
+                      >
+                        2. Ads Content
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))
+          ) : (
+            <div className="col-span-full py-20 text-center space-y-6">
+              <div className="w-24 h-24 bg-slate-100 rounded-[2rem] flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-xl rotate-3">
+                <Search className="w-10 h-10 text-slate-300" />
               </div>
+              <div>
+                <h3 className="text-xl font-heading font-black uppercase tracking-tighter italic">No Projects Detected</h3>
+                <p className="text-muted-foreground text-sm font-medium mt-1 uppercase tracking-widest opacity-60">Ready to build your digital empire?</p>
+              </div>
+              <Button onClick={handleCreateProject} size="lg" className="h-12 px-10 rounded-2xl bg-primary text-white font-black uppercase tracking-widest text-xs">Initialize First Project</Button>
             </div>
-            
-            <div className="pt-4 border-t border-white/5">
-              <p className="text-[11px] text-white/60 leading-relaxed italic">
-                "System is currently analyzing market data for 'Digital Fitness' niche. Expect winning angles in 4 minutes."
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+          )
+        )}
       </div>
+
+      <footer className="pt-10 border-t border-border text-center pb-10">
+         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground mb-1">{config.footerText}</p>
+         <p className="text-[8px] font-bold text-muted-foreground/40">{config.companyName} &copy; {new Date().getFullYear()}</p>
+      </footer>
     </div>
   );
 }
 
-// Fixed import for Zap
-import { Zap } from "lucide-react";
+

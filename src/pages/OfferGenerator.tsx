@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
-import { Gift, Loader2, Sparkles, CheckCircle2, Zap } from "lucide-react";
+import { Gift, Loader2, Sparkles, CheckCircle2, Zap, AlertCircle } from "lucide-react";
 import { db, auth } from "../lib/firebase";
 import { collection, getDocs, query, where, addDoc, serverTimestamp } from "firebase/firestore";
 import { generateAIContent, AGENT_PROMPTS } from "../services/aiService";
@@ -14,6 +14,7 @@ export default function OfferGenerator() {
   const [products, setProducts] = React.useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = React.useState<any>(null);
   const [offer, setOffer] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   const fetchProducts = async () => {
     if (!auth.currentUser) return;
@@ -29,21 +30,34 @@ export default function OfferGenerator() {
   const handleGenerateOffer = async () => {
     if (!selectedProduct) return;
     setLoading(true);
+    setError(null);
     try {
       const response = await generateAIContent(
         `Product: ${selectedProduct.name}. Type: ${selectedProduct.type}. Price: ${selectedProduct.price}. ${AGENT_PROMPTS.OFFER}`,
-        "You are a sales psychologist and offer architect. Create an irresistible offer stack."
+        "You are a sales psychologist and offer architect. Create an irresistible offer stack. Return JSON only, no markdown."
       );
-      const data = JSON.parse(response.text);
+      if (!response || !response.text) {
+        throw new Error("Neural Engine failed to deliver a response payload.");
+      }
+      const cleanText = response.text.replace(/```json\n?|```/g, "").trim();
+      let data;
+      try {
+        data = JSON.parse(cleanText);
+      } catch (parseError) {
+        throw new Error("Neural architecture breach: The engine produced an unreadable data format.");
+      }
       setOffer(data);
 
       await addDoc(collection(db, "products", selectedProduct.id, "offers"), {
         ...data,
         createdAt: serverTimestamp(),
       });
-      toast.success("Irresistible offer generated!");
-    } catch (error: any) {
-      toast.error("Failed to generate offer.");
+      toast.success("Irresistible offer architecture finalized!");
+    } catch (err: any) {
+      console.error(err);
+      const errorMessage = err.message || "Unknown synchronization error occurred.";
+      setError(errorMessage);
+      toast.error("Offer Generation Interrupted");
     } finally {
       setLoading(false);
     }
@@ -52,9 +66,9 @@ export default function OfferGenerator() {
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-10">
       <header>
-        <p className="text-white/40 text-xs font-semibold uppercase tracking-[0.2em] mb-2">Phase 3</p>
-        <h1 className="text-4xl font-bold tracking-tight">AI Offer Architect</h1>
-        <p className="text-white/60 mt-2">Transform your product into an IRRESISTIBLE offer that people feel stupid saying no to.</p>
+        <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-2 font-heading">Phase 3: Psychology</p>
+        <h1 className="text-4xl font-heading font-black tracking-tight text-foreground">AI Offer Architect</h1>
+        <p className="text-muted-foreground mt-2 font-medium">Transform assets into IRRESISTIBLE offers using Alco frameworks.</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -62,29 +76,57 @@ export default function OfferGenerator() {
           <div 
             key={p.id}
             onClick={() => setSelectedProduct(p)}
-            className={`cursor-pointer p-4 rounded-2xl border transition-all ${
+            className={`cursor-pointer p-6 rounded-[2rem] border transition-all duration-300 ${
               selectedProduct?.id === p.id 
-                ? "bg-white/10 border-white/20 shadow-xl shadow-white/5" 
-                : "bg-white/[0.03] border-white/5 hover:border-white/10"
+                ? "bg-primary text-white border-primary shadow-xl shadow-primary/20 scale-[1.02]" 
+                : "bg-card border-border hover:border-primary/30 hover:bg-secondary/50"
             }`}
           >
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">{p.type}</p>
+            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 font-heading ${selectedProduct?.id === p.id ? "text-white/70" : "text-muted-foreground"}`}>{p.type}</p>
             <h3 className="font-bold text-lg">{p.name}</h3>
           </div>
         ))}
       </div>
 
-      {selectedProduct && !offer && (
+      {selectedProduct && !offer && !error && (
         <div className="flex justify-center pt-10">
           <Button 
             onClick={handleGenerateOffer}
             disabled={loading}
-            className="h-16 px-10 bg-white text-black hover:bg-white/90 rounded-2xl font-bold text-lg shadow-2xl shadow-white/10"
+            className="h-16 px-12 bg-primary text-white hover:bg-primary/90 rounded-2xl font-black text-lg shadow-xl shadow-primary/20 transition-all hover:scale-105 active:scale-95"
           >
-            {loading ? <Loader2 className="w-6 h-6 animate-spin mr-3" /> : <Sparkles className="w-6 h-6 mr-3 fill-black" />}
-            Generate Offer Stack
+            {loading ? <Loader2 className="w-6 h-6 animate-spin mr-3" /> : <Sparkles className="w-6 h-6 mr-3" />}
+            Architect Irresistible Offer
           </Button>
         </div>
+      )}
+
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="bg-destructive/5 border-destructive/20 rounded-[2.5rem] overflow-hidden shadow-lg">
+            <CardContent className="p-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+              <div className="w-24 h-24 bg-destructive/10 rounded-[2rem] flex items-center justify-center shrink-0 border border-destructive/20 shadow-inner">
+                <AlertCircle className="w-12 h-12 text-destructive" />
+              </div>
+              <div className="space-y-3 flex-1">
+                <h3 className="text-2xl font-heading font-black text-destructive uppercase tracking-tight leading-none">Architecture Protocol Breach</h3>
+                <p className="text-muted-foreground font-medium text-lg leading-relaxed max-w-xl italic">
+                  "{error}"
+                </p>
+                <Button 
+                  variant="outline" 
+                  onClick={handleGenerateOffer}
+                  className="rounded-full border-destructive/20 text-destructive hover:bg-destructive/10 font-black text-[10px] uppercase tracking-widest px-8"
+                >
+                  Retry Architecture
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
       {offer && (
@@ -93,41 +135,43 @@ export default function OfferGenerator() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
-          <Card className="bg-white/[0.03] border-white/5 overflow-hidden">
-            <div className="h-2 bg-gradient-to-r from-emerald-400 to-cyan-400" />
-            <CardHeader>
-              <CardTitle className="text-2xl font-bold text-center italic">"The Irresistible Stack"</CardTitle>
+          <Card className="bg-card border-border shadow-2xl rounded-[3rem] overflow-hidden">
+            <div className="h-3 bg-gradient-to-r from-primary via-accent to-primary" />
+            <CardHeader className="pt-10">
+              <CardTitle className="text-3xl font-heading font-black text-center tracking-tighter">THE ALCO STACK</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-8 p-10">
-              <div className="text-center">
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Core Headline</p>
-                <h2 className="text-3xl font-black leading-tight uppercase tracking-tight">{offer.headline}</h2>
+            <CardContent className="space-y-10 p-12">
+              <div className="text-center bg-secondary/50 p-8 rounded-[2rem] border border-border/50">
+                <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-4 font-heading">Dominant Headline</p>
+                <h2 className="text-4xl font-heading font-black leading-tight tracking-tighter text-foreground">{offer.headline}</h2>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <Label className="text-[10px] font-bold text-white/40 uppercase tracking-widest pl-1">Standard Bonuses</Label>
-                  <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-6">
+                  <Label className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] pl-1 font-heading">Value Injections (Bonuses)</Label>
+                  <div className="space-y-4">
                     {offer.bonuses.map((bonus: string, i: number) => (
-                      <div key={i} className="flex gap-3 text-sm text-white/70">
-                        <Gift className="w-5 h-5 text-emerald-400 shrink-0" />
-                        <span>{bonus}</span>
+                      <div key={i} className="flex gap-4 p-4 bg-secondary/30 rounded-2xl border border-border/50 transition-colors hover:bg-secondary">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Gift className="w-4 h-4 text-primary" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground leading-tight">{bonus}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div>
-                    <Label className="text-[10px] font-bold text-white/40 uppercase tracking-widest pl-1">The Guarantee</Label>
-                    <div className="mt-2 p-4 bg-white/5 rounded-xl border border-white/5 text-sm italic text-white/80">
-                      {offer.guarantee}
+                <div className="space-y-8">
+                  <div className="bg-primary/5 p-6 rounded-[2rem] border border-primary/10">
+                    <Label className="text-[11px] font-black text-primary uppercase tracking-[0.2em] pl-1 font-heading">The Aladzan Guarantee</Label>
+                    <div className="mt-3 text-sm font-medium italic text-foreground leading-relaxed">
+                      "{offer.guarantee}"
                     </div>
                   </div>
                   <div>
-                    <Label className="text-[10px] font-bold text-white/40 uppercase tracking-widest pl-1">Scarcity / Urgency</Label>
-                    <div className="flex items-center gap-2 mt-2 text-amber-400 font-bold uppercase text-xs tracking-widest">
-                      <Zap className="w-4 h-4 fill-amber-400" />
+                    <Label className="text-[11px] font-black text-accent uppercase tracking-[0.2em] pl-1 font-heading">Urgency Vector</Label>
+                    <div className="flex items-center gap-3 mt-3 text-accent font-black uppercase text-xs tracking-widest bg-accent/5 p-4 rounded-2xl border border-accent/20">
+                      <Zap className="w-4 h-4 fill-accent" />
                       {offer.scarcity}
                     </div>
                   </div>
@@ -137,9 +181,9 @@ export default function OfferGenerator() {
           </Card>
           
           <div className="flex justify-between items-center px-4">
-            <p className="text-[10px] text-white/20 uppercase tracking-[0.3em]">Offer Verified by Sales AI Agent v1.2</p>
-            <Button variant="ghost" className="text-white/40 hover:text-white" onClick={() => setOffer(null)}>
-              Regenerate
+            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.3em] font-bold">ALCO NEURAL ENGINE v3.5 • SECURED BY ALADZAN</p>
+            <Button variant="ghost" className="text-muted-foreground hover:text-primary font-bold transition-colors" onClick={() => setOffer(null)}>
+              Reset Architecture
             </Button>
           </div>
         </motion.div>

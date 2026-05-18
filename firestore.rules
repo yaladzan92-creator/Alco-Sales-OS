@@ -33,66 +33,37 @@ service cloud.firestore {
         && data.plan in ['free', 'pro', 'enterprise'];
     }
 
-    function isValidNiche(data) {
-      return data.userId == request.auth.uid
-        && data.name is string && data.name.size() <= 200;
-    }
-
-    function isValidProduct(data) {
+    function isValidProject(data) {
       return data.userId == request.auth.uid
         && data.name is string && data.name.size() <= 200
-        && data.price is number;
+        && data.currentStep is number;
     }
 
-    function isValidOffer(data) {
-      return data.productId is string;
-    }
-
-    function isValidAngle(data) {
-      return data.productId is string;
-    }
-
-    function isValidCopy(data) {
-      return data.productId is string && data.type in ['landing_page', 'email', 'ads', 'whatsapp'];
+    function isValidAppConfig(data) {
+      return data.developerPassword is string 
+        && data.rebrandingPassword is string;
     }
 
     // --- Collections ---
 
+    match /settings/config {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidUser(incoming()) 
+      allow create: if isOwner(userId) && isValidUser(incoming()) && isEmailVerified();
+      allow update: if isOwner(userId) && isValidUser(incoming()) && isEmailVerified()
         && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'plan']);
     }
 
-    match /niches/{nicheId} {
+    match /projects/{projectId} {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidNiche(incoming()) && isValidId(nicheId);
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
-
-    match /products/{productId} {
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidProduct(incoming()) && isValidId(productId);
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && isValidProduct(incoming());
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-
-      match /offers/{offerId} {
-        allow read: if isSignedIn() && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid;
-        allow write: if isSignedIn() && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid && isValidOffer(incoming());
-      }
-      
-      match /angles/{angleId} {
-        allow read: if isSignedIn() && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid;
-        allow write: if isSignedIn() && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid && isValidAngle(incoming());
-      }
-
-      match /copies/{copyId} {
-        allow read: if isSignedIn() && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid;
-        allow write: if isSignedIn() && get(/databases/$(database)/documents/products/$(productId)).data.userId == request.auth.uid && isValidCopy(incoming());
-      }
+      allow create: if isSignedIn() && isEmailVerified() && isValidProject(incoming()) && isValidId(projectId);
+      allow update: if isSignedIn() && isEmailVerified() && resource.data.userId == request.auth.uid && isValidProject(incoming());
+      allow delete: if isSignedIn() && isEmailVerified() && resource.data.userId == request.auth.uid;
     }
   }
 }

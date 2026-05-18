@@ -12,37 +12,39 @@ import {
   Zap, 
   TrendingUp,
   Settings,
-  LogOut
+  LogOut,
+  ShieldAlert,
+  Palette
 } from "lucide-react";
 import { auth } from "../../lib/firebase";
+import { useBranding } from "@/contexts/BrandingContext";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: Search, label: "Niche Research", path: "/niche" },
-  { icon: CheckCircle2, label: "Validation", path: "/validation" },
-  { icon: Package, label: "Product Builder", path: "/products" },
-  { icon: Gift, label: "Offer Generator", path: "/offers" },
-  { icon: MousePointer2, label: "Ad Angles", path: "/angles" },
-  { icon: Type, label: "Copywriting AI", path: "/copy" },
-  { icon: FileCode, label: "Landing Pages", path: "/landing" },
-  { icon: Zap, label: "Funnels", path: "/funnels" },
-  { icon: TrendingUp, label: "Analytics AI", path: "/analytics" },
+  { icon: LayoutDashboard, label: "Dashboard Hub", path: "/dashboard" },
 ];
 
 export default function Sidebar({ className }: { className?: string }) {
   const location = useLocation();
+  const { config } = useBranding();
 
   return (
-    <div className={cn("flex flex-col h-full bg-[#050505] p-4", className)}>
-      <div className="flex items-center gap-3 px-2 mb-10">
-        <div className="w-8 h-8 bg-white flex items-center justify-center rounded-lg">
-          <Zap className="text-black w-5 h-5 fill-black" />
+    <div className={cn("flex flex-col h-full bg-sidebar border-r border-sidebar-border p-4", className)}>
+      <div className="flex items-center gap-3 px-2 mb-10 overflow-hidden">
+        <div className="w-8 h-8 bg-primary flex items-center justify-center rounded-lg shadow-lg shadow-primary/20 shrink-0 overflow-hidden">
+          {config.logoUrl ? (
+            <img src={config.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-white font-[Montserrat] font-black text-xl leading-none">{config.appName.charAt(0)}</span>
+          )}
         </div>
-        <span className="font-bold tracking-tight text-lg">AI Sales OS</span>
+        <div className="flex flex-col overflow-hidden">
+          <span className="font-heading font-bold tracking-tight text-base leading-none truncate">{config.appName}</span>
+          <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em] truncate">{config.companyName}</span>
+        </div>
       </div>
 
       <div className="flex-1 space-y-1">
-        <p className="px-2 text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-2">Main Menu</p>
+        <p className="px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Execution Ecosystem</p>
         {menuItems.map((item) => (
           <Link
             key={item.path}
@@ -50,33 +52,35 @@ export default function Sidebar({ className }: { className?: string }) {
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group",
               location.pathname === item.path 
-                ? "bg-white/10 text-white shadow-lg shadow-white/5" 
-                : "text-white/50 hover:text-white hover:bg-white/5"
+                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             )}
           >
             <item.icon className={cn(
-              "w-5 h-5 transition-transform duration-300 group-hover:scale-110",
-              location.pathname === item.path ? "text-white" : "text-white/40 group-hover:text-white"
+              "w-4 h-4 transition-transform duration-300 group-hover:scale-110",
+              location.pathname === item.path ? "text-primary-foreground" : "text-muted-foreground/60 group-hover:text-primary"
             )} />
-            <span className="text-sm font-medium">{item.label}</span>
+            <span className="text-sm font-semibold">{item.label}</span>
           </Link>
         ))}
       </div>
 
       <div className="pt-4 border-t border-white/5 space-y-1">
-        <Link
-          to="/settings"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-white/50 hover:text-white hover:bg-white/5 transition-all"
-        >
-          <Settings className="w-5 h-5" />
-          <span className="text-sm font-medium">Settings</span>
-        </Link>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+           <Link to="/developer" className="h-8 flex items-center justify-center rounded-lg bg-primary/5 hover:bg-primary/10 text-[8px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary transition-all gap-1 border border-primary/5">
+              <ShieldAlert className="w-3 h-3" /> Dev
+           </Link>
+           <Link to="/rebranding" className="h-8 flex items-center justify-center rounded-lg bg-primary/5 hover:bg-primary/10 text-[8px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary transition-all gap-1 border border-primary/5">
+              <Palette className="w-3 h-3" /> Brand
+           </Link>
+        </div>
+        
         <button
           onClick={() => auth.signOut()}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400/60 hover:text-red-400 hover:bg-red-400/5 transition-all text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-100/40 hover:text-red-400 hover:bg-red-400/5 transition-all text-left group"
         >
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium">Logout</span>
+          <LogOut className="w-4 h-4 text-red-100/20 group-hover:text-red-400" />
+          <span className="text-sm font-medium">Logout System</span>
         </button>
       </div>
     </div>

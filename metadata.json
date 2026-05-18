@@ -1,6 +1,6 @@
 {
-  "name": "AI Sales OS",
-  "description": "The ultimate AI Corporate Operating System for selling digital products. Automate niche research, product building, offer generation, and landing page creation.",
+  "name": "Alco Creative System",
+  "description": "AI-powered ecosystem by Aladzan Corpora for modern digital execution. Build Faster. Scale Smarter.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

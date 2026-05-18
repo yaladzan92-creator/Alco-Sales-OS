@@ -55,63 +55,64 @@ export default function ProductBuilder() {
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-10">
       <header>
-        <p className="text-white/40 text-xs font-semibold uppercase tracking-[0.2em] mb-2">Phase 2</p>
-        <h1 className="text-4xl font-bold tracking-tight">Product Builder</h1>
-        <p className="text-white/60 mt-2">Define your digital asset and unique selling proposition.</p>
+        <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-2 font-heading">Phase 2: Productization</p>
+        <h1 className="text-4xl font-heading font-black tracking-tight text-foreground">Digital Product Hub</h1>
+        <p className="text-muted-foreground mt-2 font-medium">Define high-ticket assets and unique selling propositions.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="lg:col-span-1 bg-white/[0.03] border-white/5 h-fit">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold tracking-tight">New Product</CardTitle>
+        <Card className="lg:col-span-1 bg-card border-border shadow-xl rounded-[2.5rem] h-fit sticky top-8">
+          <CardHeader className="p-8 pb-0">
+            <CardTitle className="text-xl font-heading font-black tracking-tight">New Asset</CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreate} className="space-y-4">
+          <CardContent className="p-8">
+            <form onSubmit={handleCreate} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-[10px] font-bold text-white/40 uppercase tracking-widest pl-1">Name</Label>
+                <Label htmlFor="name" className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] pl-1 font-heading">Asset Name</Label>
                 <Input 
                   id="name"
                   placeholder="The 7-Day Niche Hacker"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="bg-black/20 border-white/10 rounded-xl"
+                  className="bg-secondary/50 border-border h-12 rounded-xl focus:ring-1 focus:ring-primary/20"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="type" className="text-[10px] font-bold text-white/40 uppercase tracking-widest pl-1">Type</Label>
+                <Label htmlFor="type" className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] pl-1 font-heading">Format</Label>
                 <Input 
                   id="type"
                   placeholder="Masterclass / E-book"
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
-                  className="bg-black/20 border-white/10 rounded-xl"
+                  className="bg-secondary/50 border-border h-12 rounded-xl focus:ring-1 focus:ring-primary/20"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="price" className="text-[10px] font-bold text-white/40 uppercase tracking-widest pl-1">Price ($)</Label>
+                <Label htmlFor="price" className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] pl-1 font-heading">Target Price ($)</Label>
                 <Input 
                   id="price"
                   type="number"
                   placeholder="47"
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  className="bg-black/20 border-white/10 rounded-xl"
+                  className="bg-secondary/50 border-border h-12 rounded-xl focus:ring-1 focus:ring-primary/20"
                 />
               </div>
-              <Button disabled={loading} className="w-full bg-white text-black hover:bg-white/90 rounded-xl font-bold">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-                Create Product
+              <Button disabled={loading} className="w-full h-14 bg-primary text-white hover:bg-primary/90 rounded-2xl font-black shadow-lg shadow-primary/20 transition-all active:scale-95">
+                {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
+                Add to Portfolio
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        <div className="lg:col-span-2 space-y-4">
-          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest pl-1">Your Products</p>
+        <div className="lg:col-span-2 space-y-6">
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] pl-1 font-heading">Asset Portfolio Intelligence</p>
           <div className="grid grid-cols-1 gap-4">
             {products.length === 0 ? (
-              <div className="h-40 border border-dashed border-white/10 rounded-3xl flex items-center justify-center text-white/20 text-sm">
-                No products yet. Create your first one.
+              <div className="h-60 border-2 border-dashed border-border rounded-[2.5rem] flex flex-col items-center justify-center text-muted-foreground/40 text-sm font-medium bg-secondary/20 font-sans">
+                <Package className="w-10 h-10 mb-4 opacity-20" />
+                No assets in portfolio yet. Initialize your first product.
               </div>
             ) : (
               products.map((p, idx) => (
@@ -121,19 +122,22 @@ export default function ProductBuilder() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.1 }}
                 >
-                  <Card className="bg-white/[0.03] border-white/5 hover:border-white/10 transition-all group cursor-pointer">
+                  <Card className="bg-card border-border shadow-md hover:shadow-xl transition-all duration-300 group cursor-pointer rounded-[2rem] overflow-hidden border-l-4 border-l-transparent hover:border-l-primary">
                     <CardContent className="p-6 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center">
-                          <Package className="text-white/40 group-hover:text-white transition-colors" />
+                      <div className="flex items-center gap-6 text-left">
+                        <div className="w-16 h-16 bg-secondary rounded-2xl flex items-center justify-center group-hover:bg-primary transition-all duration-300 shadow-inner">
+                          <Package className="w-8 h-8 text-primary group-hover:text-white transition-colors" />
                         </div>
                         <div>
-                          <h3 className="font-bold text-lg leading-tight">{p.name}</h3>
-                          <p className="text-[10px] text-white/40 uppercase tracking-widest">{p.type} • ${p.price}</p>
+                          <h3 className="font-heading font-black text-xl tracking-tight text-foreground group-hover:text-primary transition-colors leading-none mb-2">{p.name}</h3>
+                          <div className="flex items-center gap-3">
+                            <span className="px-3 py-1 bg-secondary rounded-full text-[10px] font-black text-muted-foreground uppercase tracking-widest">{p.type}</span>
+                            <span className="text-primary font-black text-sm font-heading">${p.price}</span>
+                          </div>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" className="rounded-full hover:bg-white/10">
-                        <ArrowRight className="w-5 h-5 text-white/40 group-hover:text-white transition-colors" />
+                      <Button variant="ghost" size="icon" className="w-12 h-12 rounded-2xl hover:bg-primary/10 transition-all text-primary/40 group-hover:text-primary">
+                        <ArrowRight className="w-6 h-6" />
                       </Button>
                     </CardContent>
                   </Card>

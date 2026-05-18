@@ -10,40 +10,60 @@ import AdAngleGenerator from "@/pages/AdAngleGenerator";
 import CopywritingAI from "@/pages/CopywritingAI";
 import Sidebar from "@/components/layout/Sidebar";
 import Login from "@/pages/Login";
+import DeveloperPanel from "@/pages/DeveloperPanel";
+import RebrandingPanel from "@/pages/RebrandingPanel";
 import { Toaster } from "@/components/ui/sonner";
+import { BrandingProvider, useBranding } from "@/contexts/BrandingContext";
+import WorkflowWizard from "@/pages/WorkflowWizard";
 
-export default function App() {
+function AppContent() {
   const [user, setUser] = React.useState<User | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [authLoading, setAuthLoading] = React.useState(true);
+  const { config, loading: brandingLoading } = useBranding();
 
   React.useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setLoading(false);
+      setAuthLoading(false);
     });
   }, []);
 
-  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-[#050505] text-white">Loading OS...</div>;
+  if (authLoading || brandingLoading) return <div className="h-screen w-full flex flex-col items-center justify-center bg-background text-foreground font-heading">
+    <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center animate-pulse mb-4 overflow-hidden">
+      {config.logoUrl ? (
+        <img src={config.logoUrl} alt={config.appName} className="w-full h-full object-cover" />
+      ) : (
+        <span className="text-white font-black text-2xl">{config.appName.charAt(0)}</span>
+      )}
+    </div>
+    <p className="text-xs font-bold uppercase tracking-[0.3em] animate-pulse">{config.loadingText}</p>
+  </div>;
 
   if (!user) return <Login />;
 
   return (
     <BrowserRouter>
-      <div className="flex h-screen bg-[#050505] text-white overflow-hidden font-sans">
-        <Sidebar className="w-64 border-r border-white/10" />
-        <main className="flex-1 overflow-y-auto bg-[#0a0a0a]">
+      <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans transition-colors duration-500">
+        <Sidebar className="w-64" />
+        <main className="flex-1 overflow-y-auto bg-background/50">
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/niche" element={<NicheResearch />} />
-            <Route path="/products" element={<ProductBuilder />} />
-            <Route path="/offers" element={<OfferGenerator />} />
-            <Route path="/angles" element={<AdAngleGenerator />} />
-            <Route path="/copy" element={<CopywritingAI />} />
+            <Route path="/wizard/:projectId" element={<WorkflowWizard />} />
+            <Route path="/developer" element={<DeveloperPanel />} />
+            <Route path="/rebranding" element={<RebrandingPanel />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
-        <Toaster theme="dark" />
+        <Toaster theme="system" closeButton richColors />
       </div>
     </BrowserRouter>
+  );
+}
+
+export default function App() {
+  return (
+    <BrandingProvider>
+      <AppContent />
+    </BrandingProvider>
   );
 }
