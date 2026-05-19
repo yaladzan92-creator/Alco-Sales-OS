@@ -109,7 +109,7 @@ export default function OfferStep({ project, onSave, onSaveProject }: any) {
                         <div className="w-12 h-12 rounded-2xl bg-pink-500/10 flex items-center justify-center">
                            <Sparkles className="w-6 h-6 text-pink-500" />
                         </div>
-                        <h4 className="text-2xl font-heading font-black tracking-tight text-foreground uppercase">{option.title || "The Ultimate Offer"}</h4>
+                        <h4 className="text-2xl font-heading font-black tracking-tight text-foreground uppercase">{option.type || "The Ultimate Offer"}</h4>
                       </div>
                       {selectedId === option.id && <CheckCircle2 className="w-6 h-6 text-pink-500" />}
                    </div>

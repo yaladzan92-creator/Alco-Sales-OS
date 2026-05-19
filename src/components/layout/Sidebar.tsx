@@ -65,15 +65,13 @@ export default function Sidebar({ className }: { className?: string }) {
         ))}
       </div>
 
-      <div className="pt-4 border-t border-white/5 space-y-1">
-        <div className="grid grid-cols-2 gap-2 mb-2">
-           <Link to="/developer" className="h-8 flex items-center justify-center rounded-lg bg-primary/5 hover:bg-primary/10 text-[8px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary transition-all gap-1 border border-primary/5">
-              <ShieldAlert className="w-3 h-3" /> Dev
-           </Link>
-           <Link to="/rebranding" className="h-8 flex items-center justify-center rounded-lg bg-primary/5 hover:bg-primary/10 text-[8px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary transition-all gap-1 border border-primary/5">
-              <Palette className="w-3 h-3" /> Brand
-           </Link>
-        </div>
+      <div className="pt-4 border-t border-sidebar-border/50 space-y-2">
+         <Link to="/developer" className="w-full h-10 flex items-center justify-center rounded-xl bg-slate-900 hover:bg-black text-[9px] font-black uppercase tracking-[0.2em] text-white transition-all gap-3 border border-white/10 shadow-lg">
+            <ShieldAlert className="w-4 h-4 text-primary" /> Developer Mode
+         </Link>
+         <Link to="/rebrand" className="w-full h-10 flex items-center justify-center rounded-xl bg-primary/10 hover:bg-primary/20 text-[9px] font-black uppercase tracking-[0.2em] text-primary transition-all gap-3 border border-primary/20 shadow-sm">
+            <Palette className="w-4 h-4" /> Rebrand Mode
+         </Link>
         
         <button
           onClick={() => auth.signOut()}

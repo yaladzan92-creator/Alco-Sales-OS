@@ -13,6 +13,11 @@ export interface AppConfig {
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
+  backgroundColor: string;
+  foregroundColor: string;
+  successColor: string;
+  warningColor: string;
+  errorColor: string;
   primaryFont: string;
   supportingFont: string;
   tagline: string;
@@ -28,6 +33,7 @@ export interface AppConfig {
   // AI and System Config
   aiPrompts: Record<string, string>;
   featureFlags: Record<string, boolean>;
+  rollbackConfig?: Partial<AppConfig>;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -40,6 +46,11 @@ const DEFAULT_CONFIG: AppConfig = {
   primaryColor: "#000000",
   secondaryColor: "#ffffff",
   accentColor: "#3b82f6",
+  backgroundColor: "#f8fafc",
+  foregroundColor: "#0f172a",
+  successColor: "#10b981",
+  warningColor: "#f59e0b",
+  errorColor: "#ef4444",
   primaryFont: "Montserrat",
   supportingFont: "Inter",
   tagline: "Build Faster. Scale Smarter.",
@@ -106,6 +117,22 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
     }
     if (config.accentColor) {
       document.documentElement.style.setProperty("--accent", config.accentColor);
+    }
+    if (config.backgroundColor) {
+      document.documentElement.style.setProperty("--background", config.backgroundColor);
+    }
+    if (config.foregroundColor) {
+      document.documentElement.style.setProperty("--foreground", config.foregroundColor);
+    }
+    if (config.successColor) {
+      document.documentElement.style.setProperty("--success", config.successColor);
+    }
+    if (config.warningColor) {
+      document.documentElement.style.setProperty("--warning", config.warningColor);
+    }
+    if (config.errorColor) {
+      document.documentElement.style.setProperty("--error", config.errorColor);
+      document.documentElement.style.setProperty("--destructive", config.errorColor);
     }
     if (config.primaryFont) {
        document.documentElement.style.setProperty("--font-heading", config.primaryFont);

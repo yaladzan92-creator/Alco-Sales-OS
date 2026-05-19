@@ -12,6 +12,35 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
+  // Image Download Proxy to bypass CORS
+  app.get("/api/proxy-image", async (req, res) => {
+    try {
+      const imageUrl = req.query.url as string;
+      if (!imageUrl) {
+        return res.status(400).send("URL parameter is required");
+      }
+
+      console.log(`[Proxy Image] Fetching: ${imageUrl}`);
+      const response = await fetch(imageUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (contentType) {
+        res.setHeader("Content-Type", contentType);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("Proxy Image Error:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
   // Gemini API Proxy
   app.post("/api/ai/generate", async (req, res) => {
     try {
@@ -33,20 +62,49 @@ async function startServer() {
       
       console.log(`[AI Request] Prompt: ${prompt.substring(0, 50)}...`);
 
-      const response = await aiClient.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-          systemInstruction: systemInstruction || "You are Alco Creative System's AI Business Assistant by Aladzan Corpora. You specialize in digital marketing, sales funnel optimization, and high-converting copywriting. Always provide practical, efficient, and professional advice. Focus on scalable systems and premium brand execution.",
-          responseMimeType: "application/json"
+      // Retry mechanism for 503 errors
+      let attempts = 0;
+      const maxAttempts = 3;
+      let lastError = null;
+
+      while (attempts < maxAttempts) {
+        try {
+          const response = await aiClient.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: prompt,
+            config: {
+              systemInstruction: systemInstruction || "You are Alco Creative System's AI Business Assistant by Aladzan Corpora. You specialize in digital marketing, sales funnel optimization, and high-converting copywriting. Always provide practical, efficient, and professional advice. Focus on scalable systems and premium brand execution.",
+              responseMimeType: "application/json"
+            }
+          });
+          
+          if (!response.text) {
+            throw new Error("AI returned an empty response.");
+          }
+
+          return res.json({ text: response.text });
+        } catch (error: any) {
+          lastError = error;
+          attempts++;
+          
+          // Check if it's a 503 error or other transient error
+          const isRetryable = error?.message?.includes("503") || 
+                             error?.status === 503 ||
+                             error?.error?.code === 503 ||
+                             error?.message?.includes("high demand");
+
+          if (isRetryable && attempts < maxAttempts) {
+            const delay = Math.pow(2, attempts) * 1000;
+            console.warn(`[AI Retry] Attempt ${attempts} failed with 503. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          
+          break; // Not retryable or max attempts reached
         }
-      });
-      
-      if (!response.text) {
-        throw new Error("AI returned an empty response.");
       }
 
-      res.json({ text: response.text });
+      throw lastError;
     } catch (error: any) {
       console.error("Gemini Error:", error);
       res.status(500).json({ error: error.message || "An error occurred during AI generation." });

@@ -50,7 +50,7 @@ function AppContent() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/wizard/:projectId" element={<WorkflowWizard />} />
             <Route path="/developer" element={<DeveloperPanel />} />
-            <Route path="/rebranding" element={<RebrandingPanel />} />
+            <Route path="/rebrand" element={<RebrandingPanel />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>

@@ -114,7 +114,7 @@ export default function CopyStep({ project, onSave, onSaveProject }: any) {
                         <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center">
                            <Palette className="w-6 h-6 text-orange-500" />
                         </div>
-                        <h4 className="text-2xl font-heading font-black tracking-tight text-foreground uppercase">{option.title || "The Voice of Authority"}</h4>
+                        <h4 className="text-2xl font-heading font-black tracking-tight text-foreground uppercase">{option.name || "The Voice of Authority"}</h4>
                       </div>
                       {selectedId === option.id && <CheckCircle2 className="w-6 h-6 text-orange-500" />}
                    </div>

@@ -108,7 +108,7 @@ export default function AngleStep({ project, onSave, onSaveProject }: any) {
                    <div className="lg:w-64 p-8 bg-secondary/50 border-b lg:border-b-0 lg:border-r border-border flex flex-col justify-between">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2">Strategy Type</p>
-                        <h4 className="text-xl font-heading font-black tracking-tight text-foreground uppercase">{option.title}</h4>
+                        <h4 className="text-xl font-heading font-black tracking-tight text-foreground uppercase">{option.angle_set_title}</h4>
                       </div>
                       <div className="mt-8 flex items-center justify-between">
                          <div className="flex items-center gap-2">

@@ -9,11 +9,13 @@ import {
   Gift, 
   TrendingUp, 
   FileText,
+  ClipboardList,
   ChevronRight,
   ChevronLeft,
   Loader2,
   Sparkles,
-  Zap
+  Zap,
+  Palette
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,8 @@ import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
+import { useBranding } from "@/contexts/BrandingContext";
+import { cn } from "@/lib/utils";
 
 // Step Components (Stubs for now, will be implemented)
 import NicheStep from "@/components/workflow/NicheStep";
@@ -31,6 +35,7 @@ import PositioningStep from "@/components/workflow/PositioningStep";
 import OfferStep from "@/components/workflow/OfferStep";
 import AngleStep from "@/components/workflow/AngleStep";
 import CopyStep from "@/components/workflow/CopyStep";
+import SummaryStep from "@/components/workflow/SummaryStep";
 import AdsContentStep from "@/components/workflow/AdsContentStep";
 
 const STEPS = [
@@ -42,6 +47,7 @@ const STEPS = [
   { id: 6, title: "Offer Creation", icon: Gift, color: "text-pink-500", bg: "bg-pink-500/10" },
   { id: 7, title: "Marketing Angles", icon: TrendingUp, color: "text-indigo-500", bg: "bg-indigo-500/10" },
   { id: 8, title: "Copy Direction", icon: FileText, color: "text-orange-500", bg: "bg-orange-500/10" },
+  { id: 9, title: "Strategy Summary", icon: ClipboardList, color: "text-cyan-500", bg: "bg-cyan-500/10" },
 ];
 
 const MODES = [
@@ -105,12 +111,12 @@ export default function WorkflowWizard() {
         [stepKey]: data,
         updatedAt: serverTimestamp(),
       };
-      if (nextStep && activeStep < 8) {
+      if (nextStep && activeStep < 9) {
         updates.currentStep = activeStep + 1;
         setActiveStep(activeStep + 1);
-      } else if (nextStep && activeStep === 8) {
+      } else if (nextStep && activeStep === 9) {
         // Move to Ads phase
-        updates.currentStep = 9;
+        updates.currentStep = 10;
         setActiveMode("ads");
       }
       await updateDoc(docRef, updates);
@@ -149,7 +155,7 @@ export default function WorkflowWizard() {
         const stepKeys = [
           "", "nicheData", "audienceData", "painPointData", 
           "validationData",
-          "positioningData", "offerData", "marketingAngles", "copyDirection"
+          "positioningData", "offerData", "marketingAngles", "copyDirection", "summaryData"
         ];
         const key = stepKeys[activeStep];
         updateProjectData(key, data, next);
@@ -169,6 +175,9 @@ export default function WorkflowWizard() {
       case 6: return <OfferStep {...commonProps} />;
       case 7: return <AngleStep {...commonProps} />;
       case 8: return <CopyStep {...commonProps} />;
+      case 9: return <SummaryStep {...commonProps} onNext={() => {
+        updateProjectData("currentStep", 10, true);
+      }} />;
       default: return <NicheStep {...commonProps} />;
     }
   };
@@ -313,9 +322,9 @@ export default function WorkflowWizard() {
                 {activeMode === "strategy" && (
                   <div className="mb-8 flex items-end justify-between border-b border-border pb-6">
                     <div>
-                      <p className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-1">Module {activeStep} of 8</p>
+                      <p className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-1">Module {activeStep} of 9</p>
                       <h1 className="text-3xl font-heading font-black tracking-tighter text-foreground leading-none">
-                        {STEPS[activeStep - 1].title}
+                        {STEPS[activeStep - 1]?.title || "Strategy Step"}
                       </h1>
                     </div>
                     <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-secondary/50 rounded-xl border border-border shadow-sm">
