@@ -39,16 +39,11 @@ service cloud.firestore {
         && data.currentStep is number;
     }
 
-    function isValidAppConfig(data) {
-      return data.developerPassword is string 
-        && data.rebrandingPassword is string;
-    }
-
     // --- Collections ---
 
     match /settings/config {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read: if false;
+      allow write: if false;
     }
 
     match /users/{userId} {
