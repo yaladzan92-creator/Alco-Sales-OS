@@ -65,5 +65,9 @@ service cloud.firestore {
       allow update: if isSignedIn() && isEmailVerified() && resource.data.userId == request.auth.uid && isValidProject(incoming());
       allow delete: if isSignedIn() && isEmailVerified() && resource.data.userId == request.auth.uid;
     }
+
+    match /userSettings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
   }
 }

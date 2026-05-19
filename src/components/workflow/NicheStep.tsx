@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generateAIContent, AGENT_PROMPTS } from "@/services/aiService";
 import { toast } from "sonner";
+import { cn, handleAIError } from "@/lib/utils";
 import StepWrapper from "./StepWrapper";
 import SmartInput from "./SmartInput";
-import { cn } from "@/lib/utils";
 
 export default function NicheStep({ project, onSave, onSaveProject }: any) {
   const [loading, setLoading] = React.useState(false);
@@ -63,8 +63,7 @@ export default function NicheStep({ project, onSave, onSaveProject }: any) {
       onSave({ input: formData, options: data.options }, false);
       toast.success("Niche intelligence gathered!");
     } catch (error: any) {
-      console.error(error);
-      toast.error("Generation failed: " + error.message);
+      handleAIError(error, "Generation failed");
     } finally {
       setLoading(false);
     }

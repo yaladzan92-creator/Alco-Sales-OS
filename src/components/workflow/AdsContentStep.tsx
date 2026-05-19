@@ -40,7 +40,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { generateAIContent, AGENT_PROMPTS } from "@/services/aiService";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, handleAIError } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
 const AdsImage = ({ src, alt, className, ...props }: any) => {
@@ -167,8 +167,7 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
       toast.success("Full Ads Preparation Generated!");
       setTokens(prev => ({ ...prev, daily: prev.daily - 15 }));
     } catch (error: any) {
-      console.error(error);
-      toast.error("Generation failed: " + error.message);
+      handleAIError(error, "Generation failed");
     } finally {
       setLoading(false);
     }
@@ -187,7 +186,7 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
       setCurrentResult(prev => ({ ...prev, ...data }));
       toast.success("Ads Content Optimized for High Conversion!");
     } catch (error: any) {
-      toast.error("Optimization failed");
+      handleAIError(error, "Optimization failed");
     } finally {
       setIsOptimizing(false);
       setLoadingStatus("");
@@ -236,7 +235,7 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
       setTokens(prev => ({ ...prev, image: prev.image - 5 }));
       toast.success("Visual Direction & Image Prompt Generated!");
     } catch (error: any) {
-      toast.error("Visual generation failed");
+      handleAIError(error, "Visual generation failed");
     } finally {
       setLoading(false);
     }
@@ -259,7 +258,7 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
       setTokens(prev => ({ ...prev, image: prev.image - 10 }));
       toast.success("Carousel Design Flow Generated!");
     } catch (error: any) {
-      toast.error("Carousel generation failed");
+      handleAIError(error, "Carousel generation failed");
     } finally {
       setLoading(false);
     }
@@ -282,7 +281,7 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
       setTokens(prev => ({ ...prev, video: prev.video - 1 }));
       toast.success("Video Storyboard Generated!");
     } catch (error: any) {
-      toast.error("Video generation failed");
+      handleAIError(error, "Video generation failed");
     } finally {
       setLoading(false);
     }
@@ -381,7 +380,7 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
       }
       setChatInput("");
     } catch (error: any) {
-      toast.error("Assistant failed: " + error.message);
+      handleAIError(error, "Assistant failed");
     } finally {
       setAssistantLoading(false);
     }

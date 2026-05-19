@@ -17,6 +17,19 @@ export default function Dashboard() {
   const [projects, setProjects] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [creating, setCreating] = React.useState(false);
+  const [showApiNotice, setShowApiNotice] = React.useState(true);
+
+  React.useEffect(() => {
+    // Show welcome toast about API Key
+    const hasSeenNotice = localStorage.getItem("hasSeenApiNotice");
+    if (!hasSeenNotice) {
+      toast.info("Gunakan API Key Pribadi", {
+        description: "Demi kelancaran, kami menyarankan Anda menggunakan API Key sendiri. Klik banner di dashboard untuk panduan.",
+        duration: 8000
+      });
+      localStorage.setItem("hasSeenApiNotice", "true");
+    }
+  }, []);
 
   React.useEffect(() => {
     const fetchProjects = async () => {
@@ -65,7 +78,17 @@ export default function Dashboard() {
           <h1 className="text-5xl font-heading font-black tracking-tighter text-foreground leading-[1.1]">
             Greetings, <span className="text-primary">{user?.displayName?.split(' ')[0] || "Strategist"}</span>.
           </h1>
-          <div className="mt-2 space-y-1">
+          <div className="flex items-center gap-3 mt-4">
+             <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600">Unified Cloud Sync Active</span>
+             </div>
+             <div className="flex items-center gap-2 px-3 py-1 bg-orange-500/10 border border-orange-500/20 rounded-full cursor-pointer hover:bg-orange-500/20 transition-all" onClick={() => toast.info("API Key Mode", { description: "Gunakan API Key Pribadi untuk kuota tak terbatas." })}>
+                <Zap className="w-3 h-3 text-orange-500" />
+                <span className="text-[8px] font-black uppercase tracking-widest text-orange-600">Personal API Key Mode</span>
+             </div>
+          </div>
+          <div className="mt-4 space-y-1">
             <p className="text-muted-foreground text-lg font-medium opacity-80 italic uppercase">{config.dashboardText}</p>
             <p className="text-[10px] font-black text-primary/40 uppercase tracking-[0.4em]">{config.tagline}</p>
           </div>
@@ -79,6 +102,49 @@ export default function Dashboard() {
           Start Unified Workflow
         </Button>
       </header>
+
+      {/* API Key Notice Banner */}
+      {showApiNotice && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-primary/5 border border-primary/20 rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden group shadow-xl shadow-primary/5"
+        >
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full -mr-32 -mt-32 blur-3xl opacity-20" />
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center border border-primary/30 shadow-inner">
+              <Zap className="w-7 h-7 text-primary animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-xl font-heading font-black uppercase tracking-tight text-foreground flex items-center gap-2">
+                Unified API Access Mode
+                <span className="bg-primary text-white text-[8px] px-2 py-0.5 rounded-full">RECOMMENDED</span>
+              </h3>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.1em] opacity-80 mt-1 max-w-md">
+                Hubungkan Google Cloud Project Anda untuk akses tanpa batas ke Model Gemini 3 Pro & Flash.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 relative z-10 w-full md:w-auto">
+            <Button 
+              onClick={() => {
+                window.location.href = "/onboarding";
+              }}
+              className="w-full md:w-auto rounded-xl bg-primary text-white hover:bg-primary/90 text-[10px] font-black uppercase tracking-widest h-12 px-8 shadow-lg shadow-primary/20"
+            >
+              Aktifkan API Saya
+            </Button>
+            <Button 
+              onClick={() => setShowApiNotice(false)}
+              variant="ghost" 
+              size="icon" 
+              className="rounded-xl hover:bg-primary/10 h-12 w-12"
+            >
+              <Users className="w-5 h-5 opacity-40" />
+            </Button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Grid of Projects */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">

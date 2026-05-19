@@ -3,14 +3,121 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+
+import { getFirestore } from "firebase-admin/firestore";
 
 dotenv.config();
 
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: "divine-function-j07pf"
+  });
+}
+
+const db = getFirestore("ai-studio-2f7f0cc9-7462-47bf-bddf-7237ccbb2d17");
 const PORT = 3000;
 
 async function startServer() {
   const app = express();
   app.use(express.json());
+
+  // Auth Middleware
+  const authenticate = async (req: any, res: any, next: any) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Unauthorized: No token provided" });
+      }
+      const token = authHeader.split(" ")[1];
+      const decodedToken = await admin.auth().verifyIdToken(token);
+      req.user = decodedToken;
+      next();
+    } catch (error) {
+      console.error("Auth Error:", error);
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+    }
+  };
+
+  // User Settings Proxy
+  app.get("/api/user/config", authenticate, async (req: any, res: any) => {
+    try {
+      const doc = await db.collection("userSettings").doc(req.user.uid).get();
+      if (!doc.exists) {
+        return res.json({ onboardingComplete: false });
+      }
+      const data = doc.data();
+      res.json({ 
+        onboardingComplete: data?.onboardingComplete || false,
+        hasApiKey: !!data?.geminiApiKey,
+        isDemoMode: data?.isDemoMode || false
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/user/config", authenticate, async (req: any, res: any) => {
+    try {
+      const { geminiApiKey, isDemoMode, onboardingComplete } = req.body;
+      
+      // Validate API Key if provided
+      if (geminiApiKey) {
+        try {
+          const genAI = new GoogleGenAI({ 
+            apiKey: geminiApiKey,
+            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+          });
+          
+          // Use a supported model for validation
+          await genAI.models.generateContent({
+            model: "gemini-3-flash-preview", 
+            contents: "hi"
+          });
+        } catch (e: any) {
+          const errorMessage = e.message || "";
+          console.error("API Key Validation Failed Detail:", errorMessage);
+          
+          // If the error message implies that the request reached Google's servers,
+          // the API key is likely valid but restricted (quota, billing, plan, etc.)
+          const reachedGoogle = errorMessage.includes("429") || 
+                              errorMessage.includes("RESOURCE_EXHAUSTED") || 
+                              errorMessage.includes("quota") ||
+                              errorMessage.includes("404") || 
+                              errorMessage.includes("NOT_FOUND") ||
+                              errorMessage.includes("400") || // Bad request but authenticated
+                              errorMessage.includes("INVALID_ARGUMENT");
+
+          // Explicitly check for 403 / UNAUTHORIZED which means the key is actually wrong
+          const isUnauthorized = errorMessage.includes("403") || 
+                                errorMessage.includes("PERMISSION_DENIED") ||
+                                errorMessage.includes("API key not valid");
+
+          if (reachedGoogle && !isUnauthorized) {
+            console.warn("API Key is authenticated but model/quota issues occur. Permitting save.");
+          } else {
+            return res.status(400).json({ 
+              error: `Koneksi Gagal: ${errorMessage.substring(0, 100)}...`,
+              details: errorMessage
+            });
+          }
+        }
+      }
+
+      await db.collection("userSettings").doc(req.user.uid).set({
+        userId: req.user.uid,
+        geminiApiKey: geminiApiKey || null,
+        isDemoMode: !!isDemoMode,
+        onboardingComplete: !!onboardingComplete,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   // Image Download Proxy to bypass CORS
   app.get("/api/proxy-image", async (req, res) => {
@@ -42,17 +149,39 @@ async function startServer() {
   });
 
   // Gemini API Proxy
-  app.post("/api/ai/generate", async (req, res) => {
+  app.post("/api/ai/generate", authenticate, async (req: any, res: any) => {
     try {
       const { prompt, systemInstruction } = req.body;
+      const userId = req.user.uid;
+
+      // Check for User's private API Key
+      const userSettingsDoc = await db.collection("userSettings").doc(userId).get();
+      const userSettings = userSettingsDoc.exists ? userSettingsDoc.data() : null;
       
-      if (!process.env.GEMINI_API_KEY) {
-        throw new Error("GEMINI_API_KEY is not configured in environment variables.");
+      let apiKey = userSettings?.geminiApiKey;
+      let isUsingFallback = false;
+
+      // Fallback logic for Demo Mode
+      if (!apiKey) {
+        if (userSettings?.isDemoMode) {
+          apiKey = process.env.GEMINI_API_KEY;
+          isUsingFallback = true;
+          console.log(`[AI Request] User ${userId} is using DEMO / FALLBACK API Key.`);
+        } else {
+          return res.status(403).json({ 
+            error: "AI_REQUIRED", 
+            message: "AI Connection not found. Please complete onboarding or provide your Gemini API Key." 
+          });
+        }
+      }
+      
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY is not configured or provided.");
       }
 
-      // Lazy init to ensure env vars are loaded
+      // Lazy init with the chosen API Key
       const aiClient = new GoogleGenAI({ 
-        apiKey: process.env.GEMINI_API_KEY,
+        apiKey: apiKey,
         httpOptions: {
           headers: {
             'User-Agent': 'aistudio-build',
@@ -60,7 +189,7 @@ async function startServer() {
         }
       });
       
-      console.log(`[AI Request] Prompt: ${prompt.substring(0, 50)}...`);
+      console.log(`[AI Request] User: ${userId} | ${isUsingFallback ? "DEMO" : "PRIVATE"} | Prompt: ${prompt.substring(0, 50)}...`);
 
       // Retry mechanism for 503 errors
       let attempts = 0;
@@ -70,7 +199,7 @@ async function startServer() {
       while (attempts < maxAttempts) {
         try {
           const response = await aiClient.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3.1-pro-preview",
             contents: prompt,
             config: {
               systemInstruction: systemInstruction || "You are Alco Creative System's AI Business Assistant by Aladzan Corpora. You specialize in digital marketing, sales funnel optimization, and high-converting copywriting. Always provide practical, efficient, and professional advice. Focus on scalable systems and premium brand execution.",
@@ -87,6 +216,33 @@ async function startServer() {
           lastError = error;
           attempts++;
           
+          // Check for 429 Resource Exhausted / Rate Limit
+          const isRateLimit = error?.status === 429 || 
+                             error?.error?.code === 429 || 
+                             error?.message?.includes("429") ||
+                             error?.message?.includes("quota") ||
+                             error?.message?.includes("RESOURCE_EXHAUSTED");
+
+          if (isRateLimit) {
+            console.error("[AI Rate Limit]", error);
+            
+            // Try to find retry delay in Google RPC details
+            let retryAfter = "someday";
+            if (error?.error?.details) {
+              const retryInfo = error.error.details.find((d: any) => d['@type']?.includes('RetryInfo'));
+              if (retryInfo?.retryDelay) {
+                retryAfter = retryInfo.retryDelay;
+              }
+            }
+
+            return res.status(429).json({ 
+              error: "AI Quota Exceeded", 
+              message: `You have exceeded your daily Gemini API quota. Please try again after ${retryAfter}.`,
+              details: error.message,
+              retryAfter
+            });
+          }
+
           // Check if it's a 503 error or other transient error
           const isRetryable = error?.message?.includes("503") || 
                              error?.status === 503 ||

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import { useBranding } from "@/contexts/BrandingContext";
+import { toast } from "sonner";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard Hub", path: "/dashboard" },
@@ -66,6 +67,14 @@ export default function Sidebar({ className }: { className?: string }) {
       </div>
 
       <div className="pt-4 border-t border-sidebar-border/50 space-y-2">
+         <button 
+           onClick={() => {
+             window.location.href = "/onboarding";
+           }}
+           className="w-full h-10 flex items-center justify-center rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-[9px] font-black uppercase tracking-[0.2em] text-orange-600 transition-all gap-3 border border-orange-500/20 shadow-sm"
+         >
+            <Zap className="w-4 h-4" /> Manage API Key
+         </button>
          <Link to="/developer" className="w-full h-10 flex items-center justify-center rounded-xl bg-slate-900 hover:bg-black text-[9px] font-black uppercase tracking-[0.2em] text-white transition-all gap-3 border border-white/10 shadow-lg">
             <ShieldAlert className="w-4 h-4 text-primary" /> Developer Mode
          </Link>

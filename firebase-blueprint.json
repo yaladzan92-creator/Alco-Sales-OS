@@ -94,6 +94,19 @@
       },
       "required": ["userId", "name", "currentStep"]
     },
+    "UserSettings": {
+      "title": "User Personal Settings",
+      "description": "Secure storage for user-specific API keys and configurations",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "geminiApiKey": { "type": "string", "description": "User's individual Gemini API Key" },
+        "isDemoMode": { "type": "boolean", "default": false },
+        "onboardingComplete": { "type": "boolean", "default": false },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId"]
+    },
     "AppConfig": {
       "title": "Application Configuration",
       "description": "Global settings for branding and AI behavior",
@@ -122,6 +135,10 @@
     "/projects/{projectId}": {
       "schema": "Project",
       "description": "Unified business projects"
+    },
+    "/userSettings/{userId}": {
+      "schema": "UserSettings",
+      "description": "User specific configurations"
     },
     "/settings/config": {
       "schema": "AppConfig",

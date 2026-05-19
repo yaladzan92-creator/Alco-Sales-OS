@@ -1,16 +1,51 @@
+import { auth } from "@/lib/firebase";
+
 export async function generateAIContent(prompt: string, systemInstruction?: string) {
+  const token = await auth.currentUser?.getIdToken();
+  
   const response = await fetch("/api/ai/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
     body: JSON.stringify({ prompt, systemInstruction }),
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "AI Generation failed");
+    const errorData = await response.json();
+    if (response.status === 429) {
+      throw new Error(`QUOTA_EXCEEDED: ${errorData.message || "AI Quota limit reached. Please wait a moment before trying again."}`);
+    }
+    if (response.status === 403 && errorData.error === "AI_REQUIRED") {
+      window.location.href = "/onboarding?error=ai_required";
+      throw new Error("AI_CONNECTION_REQUIRED");
+    }
+    throw new Error(errorData.error || errorData.message || "AI Generation failed");
   }
   
   return await response.json();
+}
+
+export async function getUserConfig() {
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch("/api/user/config", {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+  return res.json();
+}
+
+export async function saveUserConfig(data: any) {
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch("/api/user/config", {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify(data)
+  });
+  return res.json();
 }
 
 export const AGENT_PROMPTS = {
