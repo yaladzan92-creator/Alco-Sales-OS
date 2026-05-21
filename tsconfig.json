@@ -18,6 +18,15 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "firebase/app": [
+        "./src/lib/firebase"
+      ],
+      "firebase/auth": [
+        "./src/lib/firebase"
+      ],
+      "firebase/firestore": [
+        "./src/lib/firebase"
       ]
     },
     "allowImportingTsExtensions": true,

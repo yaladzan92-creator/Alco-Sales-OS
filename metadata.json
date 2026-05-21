@@ -1,6 +1,8 @@
 {
-  "name": "Alco Creative System",
+  "name": "Remix: Alco Ai SOS",
   "description": "AI-powered ecosystem by Aladzan Corpora for modern digital execution. Build Faster. Scale Smarter.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
