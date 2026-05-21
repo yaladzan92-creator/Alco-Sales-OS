@@ -138,6 +138,8 @@ export default function WorkflowWizard() {
     }
   };
 
+
+
   if (loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center space-y-4">
@@ -320,7 +322,7 @@ export default function WorkflowWizard() {
                 transition={{ duration: 0.3 }}
               >
                 {activeMode === "strategy" && (
-                  <div className="mb-8 flex items-end justify-between border-b border-border pb-6">
+                  <div className="mb-8 flex items-end justify-between border-b border-border pb-6" id="workflow-wizard-header">
                     <div>
                       <p className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-1">Module {activeStep} of 9</p>
                       <h1 className="text-3xl font-heading font-black tracking-tighter text-foreground leading-none">
@@ -329,7 +331,7 @@ export default function WorkflowWizard() {
                     </div>
                     <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-secondary/50 rounded-xl border border-border shadow-sm">
                       <Zap className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-foreground">AI SYNC ACTIVE</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#FFF]">AI SYNC ACTIVE</span>
                     </div>
                   </div>
                 )}

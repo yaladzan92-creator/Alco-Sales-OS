@@ -50,6 +50,7 @@ export default function Sidebar({ className }: { className?: string }) {
           <Link
             key={item.path}
             to={item.path}
+            id={`sidebar-link-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group",
               location.pathname === item.path 
@@ -67,23 +68,16 @@ export default function Sidebar({ className }: { className?: string }) {
       </div>
 
       <div className="pt-4 border-t border-sidebar-border/50 space-y-2">
-         <button 
-           onClick={() => {
-             window.location.href = "/onboarding";
-           }}
-           className="w-full h-10 flex items-center justify-center rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-[9px] font-black uppercase tracking-[0.2em] text-orange-600 transition-all gap-3 border border-orange-500/20 shadow-sm"
-         >
-            <Zap className="w-4 h-4" /> Manage API Key
-         </button>
-         <Link to="/developer" className="w-full h-10 flex items-center justify-center rounded-xl bg-slate-900 hover:bg-black text-[9px] font-black uppercase tracking-[0.2em] text-white transition-all gap-3 border border-white/10 shadow-lg">
+         <Link to="/developer" className="w-full h-10 flex items-center justify-center rounded-xl bg-slate-900 hover:bg-black text-[9px] font-black uppercase tracking-[0.2em] text-white transition-all gap-3 border border-white/10 shadow-lg" id="btn-dev-mode">
             <ShieldAlert className="w-4 h-4 text-primary" /> Developer Mode
-         </Link>
-         <Link to="/rebrand" className="w-full h-10 flex items-center justify-center rounded-xl bg-primary/10 hover:bg-primary/20 text-[9px] font-black uppercase tracking-[0.2em] text-primary transition-all gap-3 border border-primary/20 shadow-sm">
+          </Link>
+          <Link to="/rebrand" className="w-full h-10 flex items-center justify-center rounded-xl bg-primary/10 hover:bg-primary/20 text-[9px] font-black uppercase tracking-[0.2em] text-primary transition-all gap-3 border border-primary/20 shadow-sm" id="btn-rebrand-mode">
             <Palette className="w-4 h-4" /> Rebrand Mode
-         </Link>
+          </Link>
         
         <button
           onClick={() => auth.signOut()}
+          id="btn-logout"
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-100/40 hover:text-red-400 hover:bg-red-400/5 transition-all text-left group"
         >
           <LogOut className="w-4 h-4 text-red-100/20 group-hover:text-red-400" />

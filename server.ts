@@ -19,14 +19,11 @@ if (!admin.apps.length) {
 const db = getFirestore("ai-studio-2f7f0cc9-7462-47bf-bddf-7237ccbb2d17");
 const PORT = 3000;
 
-// Memory fallback for user config when Firebase is disconnected/offline
-const adminConfigStore: Record<string, any> = {};
-
 async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Auth Middleware with Graceful Mock Failover
+  // Auth Middleware
   const authenticate = async (req: any, res: any, next: any) => {
     try {
       const authHeader = req.headers.authorization;
@@ -34,39 +31,20 @@ async function startServer() {
         return res.status(401).json({ error: "Unauthorized: No token provided" });
       }
       const token = authHeader.split(" ")[1];
-      
-      if (token === "mock-token") {
-        req.user = { uid: "mock-userId", name: "Kreatif Alco", email: "user@alco.com" };
-        return next();
-      }
-
-      try {
-        const decodedToken = await admin.auth().verifyIdToken(token);
-        req.user = decodedToken;
-      } catch (err) {
-        console.warn("[Firebase Admin Verification Failed] Falling back to mock user profile:", err);
-        req.user = { uid: "mock-userId", name: "Kreatif Alco", email: "user@alco.com" };
-      }
+      const decodedToken = await admin.auth().verifyIdToken(token);
+      req.user = decodedToken;
       next();
     } catch (error) {
-      console.error("Auth Middleware Error, continuing with mock user:", error);
-      req.user = { uid: "mock-userId", name: "Kreatif Alco", email: "user@alco.com" };
-      next();
+      console.error("Auth Error:", error);
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
     }
   };
 
   // User Settings Proxy
   app.get("/api/user/config", authenticate, async (req: any, res: any) => {
     try {
-      let data = adminConfigStore[req.user.uid] || null;
-      if (!data) {
-        try {
-          const doc = await db.collection("userSettings").doc(req.user.uid).get();
-          data = doc.exists ? doc.data() : null;
-        } catch (fbError) {
-          console.warn("[Firebase Admin Firestore] Could not retrieve config, using empty local database:", fbError);
-        }
-      }
+      const doc = await db.collection("userSettings").doc(req.user.uid).get();
+      const data = doc.exists ? doc.data() : null;
       res.json({ 
         onboardingComplete: true,
         hasApiKey: !!data?.geminiApiKey || !!process.env.GEMINI_API_KEY,
@@ -80,21 +58,14 @@ async function startServer() {
   app.post("/api/user/config", authenticate, async (req: any, res: any) => {
     try {
       const { geminiApiKey, isDemoMode } = req.body;
-      const configData = {
+      
+      await db.collection("userSettings").doc(req.user.uid).set({
         userId: req.user.uid,
         geminiApiKey: geminiApiKey || null,
         isDemoMode: isDemoMode !== false,
         onboardingComplete: true,
         updatedAt: new Date().toISOString()
-      };
-      
-      adminConfigStore[req.user.uid] = configData;
-
-      try {
-        await db.collection("userSettings").doc(req.user.uid).set(configData, { merge: true });
-      } catch (fbError) {
-        console.warn("[Firebase Admin Firestore] Could not update config, stored in memory only:", fbError);
-      }
+      }, { merge: true });
 
       res.json({ success: true });
     } catch (error: any) {
@@ -137,23 +108,9 @@ async function startServer() {
       const { prompt, systemInstruction } = req.body;
       const userId = req.user.uid;
 
-      if (typeof prompt !== "string" || prompt.trim().length === 0) {
-        return res.status(400).json({
-          error: "INVALID_PROMPT",
-          message: "Prompt is required and must be a non-empty string."
-        });
-      }
-
-      // Check user memory config first, then Firestore, then fallback to env variables
-      let userSettings = adminConfigStore[userId] || null;
-      if (!userSettings) {
-        try {
-          const userSettingsDoc = await db.collection("userSettings").doc(userId).get();
-          userSettings = userSettingsDoc.exists ? userSettingsDoc.data() : null;
-        } catch (fbError) {
-          console.warn("[Firebase Admin] Could not fetch private developer API key, utilizing ENV fallback value");
-        }
-      }
+      // Check for User's private API Key, fall back to process.env.GEMINI_API_KEY
+      const userSettingsDoc = await db.collection("userSettings").doc(userId).get();
+      const userSettings = userSettingsDoc.exists ? userSettingsDoc.data() : null;
       
       const apiKey = userSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
       
@@ -173,8 +130,7 @@ async function startServer() {
         }
       });
       
-      const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-      console.log(`[AI Request] User: ${userId} | Model: ${modelName} | Prompt: ${prompt.substring(0, 50)}...`);
+      console.log(`[AI Request] User: ${userId} | Model: gemini-3.5-flash | Prompt: ${prompt.substring(0, 50)}...`);
 
       // Retry mechanism for 503 errors
       let attempts = 0;
@@ -184,7 +140,7 @@ async function startServer() {
       while (attempts < maxAttempts) {
         try {
           const result = await aiClient.models.generateContent({
-            model: modelName,
+            model: "gemini-3.5-flash",
             contents: prompt,
             config: {
               systemInstruction: systemInstruction || "You are Alco Creative System's AI Business Assistant by Aladzan Corpora. You specialize in digital marketing, sales funnel optimization, and high-converting copywriting. Always provide practical, efficient, and professional advice. Focus on scalable systems and premium brand execution.",
@@ -255,10 +211,7 @@ async function startServer() {
 
   // Since I need to use the exact patterns from skill
   app.post("/api/ai/stream", async (req, res) => {
-    res.status(501).json({
-      error: "STREAMING_NOT_IMPLEMENTED",
-      message: "Streaming generation is not implemented yet. Use /api/ai/generate."
-    });
+    // For streaming if needed
   });
 
   if (process.env.NODE_ENV !== "production") {

@@ -1,10 +1,10 @@
 import React from "react";
 import { motion } from "motion/react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { TrendingUp, Users, Package, Search, ArrowUpRight, Zap, Plus, ChevronRight, Loader2 } from "lucide-react";
+import { TrendingUp, Users, Package, Search, ArrowUpRight, Zap, Plus, ChevronRight, Loader2, Download, Upload, Trash2, X } from "lucide-react";
 import { auth, db } from "../lib/firebase";
 import { Button } from "../components/ui/button";
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "../lib/utils";
@@ -15,6 +15,96 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { config } = useBranding();
   const [projects, setProjects] = React.useState<any[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = React.useState<{[key: string]: number}>({});
+
+  const handleExportProject = (e: React.MouseEvent, proj: any) => {
+    e.stopPropagation();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(proj, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `project_${proj.name || 'export'}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    toast.success(`Project "${proj.name}" Berhasil Di-export!`);
+  };
+
+  const handleImportProject = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const imported = JSON.parse(event.target?.result as string);
+        if (!imported || typeof imported !== 'object') {
+          throw new Error("Invalid format");
+        }
+        
+        if (!user) {
+          toast.error("Anda harus login terlebih dahulu.");
+          return;
+        }
+
+        const { id, createdAt, updatedAt, userId, ...cleanData } = imported;
+        
+        const docRef = await addDoc(collection(db, "projects"), {
+          ...cleanData,
+          userId: user.uid,
+          name: cleanData.name ? `${cleanData.name} (Import)` : "Imported Project",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        const newProj = {
+          id: docRef.id,
+          userId: user.uid,
+          ...cleanData,
+          name: cleanData.name ? `${cleanData.name} (Import)` : "Imported Project"
+        };
+        
+        setProjects(prev => [newProj, ...prev]);
+        toast.success("Progress Project Berhasil Di-import!");
+      } catch (err) {
+        toast.error("Format file tidak valid. Mohon gunakan file JSON export yang valid.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDeleteProject = async (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    
+    const confirmState = deleteConfirm[projectId] || 0;
+    
+    if (confirmState === 0) {
+      setDeleteConfirm(prev => ({ ...prev, [projectId]: 1 }));
+      toast.warning("Klik sekali lagi untuk konfirmasi penghapusan (Konfirmasi 1/2)");
+      return;
+    }
+    
+    if (confirmState === 1) {
+      setDeleteConfirm(prev => ({ ...prev, [projectId]: 2 }));
+      toast.error("Klik terakhir untuk menghapus project secara permanen! (Konfirmasi 2/2)");
+      return;
+    }
+    
+    if (confirmState === 2) {
+      try {
+        const docRef = doc(db, "projects", projectId);
+        await deleteDoc(docRef);
+        setProjects(prev => prev.filter(p => p.id !== projectId));
+        setDeleteConfirm(prev => {
+          const updated = { ...prev };
+          delete updated[projectId];
+          return updated;
+        });
+        toast.success("Project Berhasil Dihapus!");
+      } catch (err: any) {
+        console.error("Delete error:", err);
+        toast.error("Gagal menghapus project: " + err.message);
+      }
+    }
+  };
   const [loading, setLoading] = React.useState(true);
   const [creating, setCreating] = React.useState(false);
   const [showApiNotice, setShowApiNotice] = React.useState(true);
@@ -93,14 +183,35 @@ export default function Dashboard() {
             <p className="text-[10px] font-black text-primary/40 uppercase tracking-[0.4em]">{config.tagline}</p>
           </div>
         </div>
-        <Button 
-          disabled={creating}
-          onClick={handleCreateProject}
-          className="h-14 px-8 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center gap-3 uppercase tracking-widest text-xs"
-        >
-          {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-          Start Unified Workflow
-        </Button>
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="relative">
+            <input 
+              type="file" 
+              id="dashboard-import-project"
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
+              onChange={handleImportProject}
+              accept=".json"
+            />
+            <Button 
+              variant="outline"
+              id="btn-import-project-dash"
+              className="h-14 px-6 rounded-2xl border-border bg-slate-100 dark:bg-zinc-900 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all font-black text-xs uppercase tracking-widest flex items-center gap-2"
+            >
+              <Upload className="w-5 h-5 text-primary" />
+              Import Project
+            </Button>
+          </div>
+
+          <Button 
+            disabled={creating}
+            onClick={handleCreateProject}
+            id="btn-create-project-dash"
+            className="h-14 px-8 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center gap-3 uppercase tracking-widest text-xs w-full md:w-auto"
+          >
+            {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+            Start Unified Workflow
+          </Button>
+        </div>
       </header>
 
       {/* API Key Notice Banner */}
@@ -168,9 +279,59 @@ export default function Dashboard() {
                     <div className="p-3 bg-secondary rounded-2xl group-hover:bg-primary transition-all duration-300">
                       <Zap className="h-5 w-5 text-primary group-hover:text-white" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Step</span>
-                      <span className="text-xl font-heading font-black text-foreground">{project.currentStep}/8</span>
+                    
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        id={`btn-export-${project.id}`}
+                        onClick={(e) => handleExportProject(e, project)}
+                        className="h-8 w-8 rounded-lg hover:bg-primary/15 hover:text-primary transition-all text-muted-foreground"
+                        title="Export Project Progress"
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      
+                      {/* Delete Flow with Double Confirmation */}
+                      <div className="flex items-center gap-1">
+                        {deleteConfirm[project.id] > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm(prev => ({ ...prev, [project.id]: 0 }));
+                            }}
+                            className="h-8 w-8 rounded-lg hover:bg-slate-200 text-slate-500"
+                            title="Batal"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                        <Button
+                          variant={deleteConfirm[project.id] === 2 ? "destructive" : deleteConfirm[project.id] === 1 ? "outline" : "ghost"}
+                          size={deleteConfirm[project.id] > 0 ? "sm" : "icon"}
+                          id={`btn-delete-${project.id}`}
+                          onClick={(e) => handleDeleteProject(e, project.id)}
+                          className={cn(
+                            "h-8 rounded-lg transition-all text-[9.5px] font-black uppercase tracking-wider",
+                            deleteConfirm[project.id] > 0 ? "px-2.5 h-8 gap-1" : "w-8 h-8 hover:bg-red-500/10 text-red-500 hover:text-red-600"
+                          )}
+                        >
+                          {deleteConfirm[project.id] === 2 ? (
+                            <>SANGAT YAKIN?</>
+                          ) : deleteConfirm[project.id] === 1 ? (
+                            <>YUK YAKIN?</>
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5 ml-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Step</span>
+                        <span className="text-xl font-heading font-black text-foreground">{project.currentStep}/8</span>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="p-8 pt-4 space-y-6">

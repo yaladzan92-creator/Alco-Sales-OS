@@ -30,7 +30,8 @@ import {
   Presentation,
   Maximize2,
   MoreVertical,
-  ExternalLink
+  ExternalLink,
+  FileText
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -181,9 +182,28 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
       const context = `CURRENT ADS CONTENT: ${JSON.stringify(currentResult)}`;
       const response = await generateAIContent(context, AGENT_PROMPTS.OPTIMIZE_ADS);
       const cleanText = response.text.replace(/```json\n?|```/g, "").trim();
-      const data = JSON.parse(cleanText);
+      let data = JSON.parse(cleanText);
       
-      setCurrentResult(prev => ({ ...prev, ...data }));
+      // Handle potential nesting from creative model responses
+      if (data.updated_fields) {
+        data = data.updated_fields;
+      } else if (data.optimized_ads_content) {
+        data = data.optimized_ads_content;
+      } else if (data.ads_content) {
+        data = data.ads_content;
+      } else if (data.result) {
+        data = data.result;
+      }
+      
+      setCurrentResult(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          ...data,
+          headlines: data.headlines || prev.headlines,
+          hashtags: data.hashtags || prev.hashtags
+        };
+      });
       toast.success("Ads Content Optimized for High Conversion!");
     } catch (error: any) {
       handleAIError(error, "Optimization failed");
@@ -456,7 +476,7 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
               </div>
            </div>
 
-           <div className="grid grid-cols-2 gap-2 mt-8 pt-6 border-t border-border/50">
+           <div className="grid grid-cols-2 gap-2 mt-8 pt-6 border-t border-border/50 hidden">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -549,7 +569,7 @@ export default function AdsContentStep({ project, onSaveProject }: any) {
         <div className="p-4 bg-card border border-border rounded-[2rem] shadow-lg flex items-center justify-between">
            <div className="flex items-center gap-1 md:gap-4 overflow-x-auto no-scrollbar">
               {[
-                { id: 1, label: "Detailed Script", icon: FileTextIcon, enabled: true },
+                { id: 1, label: "Detailed Script", icon: FileText, enabled: true },
                 { id: 2, label: "Strategic Visual", icon: ImageIcon, enabled: true },
                 { id: 3, label: "Carousel Flow", icon: Layout, enabled: config.featureFlags.enableCarousel },
                 { id: 4, label: "Video Storyboard", icon: Film, enabled: config.featureFlags.enableVideo }
