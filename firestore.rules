@@ -1,73 +1,57 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // 3. Primitive Helpers
+    
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
+    
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-    function isEmailVerified() {
-      return request.auth.token.email_verified == true;
-    }
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-    function incoming() {
-      return request.resource.data;
-    }
-    function existing() {
-      return resource.data;
-    }
 
-    // 2. Validation Blueprints
-    function isValidUser(data) {
-      return data.uid == request.auth.uid 
-        && data.email is string
-        && data.plan in ['free', 'pro', 'enterprise'];
-    }
-
-    function isValidProject(data) {
-      return data.userId == request.auth.uid
-        && data.name is string && data.name.size() <= 200
-        && data.currentStep is number;
-    }
-
-    function isValidAppConfig(data) {
-      return data.developerPassword is string 
-        && data.rebrandingPassword is string;
-    }
-
-    // --- Collections ---
-
+    // Settings config - accessible by anyone to read, writers must be signed in
     match /settings/config {
       allow read: if true;
       allow write: if isSignedIn();
     }
 
-    match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(incoming()) && isEmailVerified();
-      allow update: if isOwner(userId) && isValidUser(incoming()) && isEmailVerified()
-        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'plan']);
-    }
-
-    match /projects/{projectId} {
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isEmailVerified() && isValidProject(incoming()) && isValidId(projectId);
-      allow update: if isSignedIn() && isEmailVerified() && resource.data.userId == request.auth.uid && isValidProject(incoming());
-      allow delete: if isSignedIn() && isEmailVerified() && resource.data.userId == request.auth.uid;
-    }
-
+    // User settings - strictly owned
     match /userSettings/{userId} {
       allow read, write: if isOwner(userId);
+    }
+
+    // Users collection - strictly owned
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Unified projects - accessible to read and write by authenticated users
+    match /projects/{projectId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Niches - accessible to read and write by authenticated users
+    match /niches/{nicheId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Products and nested content - accessible to read and write by authenticated users
+    match /products/{productId} {
+      allow read, write: if isSignedIn();
+
+      match /angles/{angleId} {
+        allow read, write: if isSignedIn();
+      }
+
+      match /offers/{offerId} {
+        allow read, write: if isSignedIn();
+      }
+
+      match /copies/{copyId} {
+        allow read, write: if isSignedIn();
+      }
     }
   }
 }

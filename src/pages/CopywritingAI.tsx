@@ -4,11 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Type, Loader2, Copy as CopyIcon, Check, FileText, Sparkles, MousePointer2, Phone, AlertCircle } from "lucide-react";
-import { db, auth } from "@/lib/firebase";
-import { collection, getDocs, query, where, addDoc, serverTimestamp } from "firebase/firestore";
+import { db, auth, collection, getDocs, query, where, addDoc, serverTimestamp } from "@/lib/firebase";
 import { generateAIContent, AGENT_PROMPTS } from "@/services/aiService";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { safeCopyToClipboard } from "@/lib/utils";
 
 const copyTypes = [
   { id: "landing_page", label: "Landing Page", icon: FileText },
@@ -81,10 +81,15 @@ export default function CopywritingAI() {
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(generatedCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.info("Copied to clipboard");
+    safeCopyToClipboard(generatedCopy).then((success) => {
+      if (success) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.info("Copied to clipboard");
+      } else {
+        toast.error("Failed to copy automatically. Please select the text and copy manually.");
+      }
+    });
   };
 
   return (

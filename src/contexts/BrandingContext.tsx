@@ -1,6 +1,5 @@
 import React from "react";
-import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { doc, getDoc, setDoc, onSnapshot, db } from "@/lib/firebase";
 import { toast } from "sonner";
 
 export interface AppConfig {
@@ -38,7 +37,7 @@ export interface AppConfig {
 
 const DEFAULT_CONFIG: AppConfig = {
   developerPassword: "aladzan92@",
-  rebrandingPassword: "rebrand92@",
+  rebrandingPassword: "1234567890",
   appName: "Alco Creative",
   toolName: "Ads AI Builder",
   brandName: "Alco",

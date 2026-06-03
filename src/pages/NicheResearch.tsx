@@ -6,8 +6,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Search, Loader2, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 import { generateAIContent, AGENT_PROMPTS } from "../services/aiService";
-import { db, auth } from "../lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db, auth, collection, addDoc, serverTimestamp } from "../lib/firebase";
 import { toast } from "sonner";
 
 interface NicheResult {

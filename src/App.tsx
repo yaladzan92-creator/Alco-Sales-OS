@@ -1,7 +1,6 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, onAuthStateChanged, User } from "@/lib/firebase";
 import Dashboard from "@/pages/Dashboard";
 import NicheResearch from "@/pages/NicheResearch";
 import ProductBuilder from "@/pages/ProductBuilder";
@@ -15,20 +14,125 @@ import RebrandingPanel from "@/pages/RebrandingPanel";
 import { Toaster } from "@/components/ui/sonner";
 import { BrandingProvider, useBranding } from "@/contexts/BrandingContext";
 import WorkflowWizard from "@/pages/WorkflowWizard";
+import { Lock, LogOut, ExternalLink, Zap, Loader2 } from "lucide-react";
+import { getUserConfig, saveUserConfig } from "@/services/aiService";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 function AppContent() {
   const [user, setUser] = React.useState<User | null>(null);
   const [authLoading, setAuthLoading] = React.useState(true);
   const [onboardingStatus, setOnboardingStatus] = React.useState<{ complete: boolean; loading: boolean }>({ complete: true, loading: false });
   const { config, loading: brandingLoading } = useBranding();
+  const [showFullscreenOverlay, setShowFullscreenOverlay] = React.useState(false);
+
+  // States for client-managed mandatory API key onboarding validation
+  const [keyInput, setKeyInput] = React.useState("");
+  const [keySaving, setKeySaving] = React.useState(false);
+  const [keyLoading, setKeyLoading] = React.useState(false);
+  const [hasApiKey, setHasApiKey] = React.useState(true);
 
   React.useEffect(() => {
-    return onAuthStateChanged(auth, async (u) => {
+    const handleAuthChange = (u: User | null) => {
       setUser(u);
       setAuthLoading(false);
       setOnboardingStatus({ complete: true, loading: false });
-    });
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, handleAuthChange);
+
+    const handleGlobalAuthChange = () => {
+      handleAuthChange(auth.currentUser);
+    };
+
+    window.addEventListener("alco_auth_state_changed", handleGlobalAuthChange);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("alco_auth_state_changed", handleGlobalAuthChange);
+    };
   }, []);
+
+  // 1. Detect if the user has an existing API key in localStorage
+  React.useEffect(() => {
+    const checkUserApiKey = async () => {
+      if (!user) {
+        setHasApiKey(true);
+        return;
+      }
+
+      setKeyLoading(true);
+      const cachedKey = localStorage.getItem("alco_gemini_api_key");
+      if (cachedKey && cachedKey.trim().length > 0) {
+        setHasApiKey(true);
+      } else {
+        setHasApiKey(false);
+      }
+      setKeyLoading(false);
+    };
+
+    checkUserApiKey();
+  }, [user]);
+
+  // 2. Add listener to ensure instant state sync if the API key is updated or removed inside the app
+  React.useEffect(() => {
+    const handleKeyChange = async () => {
+      if (!user) return;
+      const cachedKey = localStorage.getItem("alco_gemini_api_key");
+      if (cachedKey && cachedKey.trim().length > 0) {
+        setHasApiKey(true);
+      } else {
+        setHasApiKey(false);
+      }
+    };
+
+    const handleKeyMissing = () => {
+      setHasApiKey(false);
+    };
+
+    window.addEventListener("alco_api_key_changed", handleKeyChange);
+    window.addEventListener("alco_api_key_missing", handleKeyMissing);
+    window.addEventListener("storage", handleKeyChange);
+    return () => {
+      window.removeEventListener("alco_api_key_changed", handleKeyChange);
+      window.removeEventListener("alco_api_key_missing", handleKeyMissing);
+      window.removeEventListener("storage", handleKeyChange);
+    };
+  }, [user]);
+
+  // Block unauthorized browser exit actions & navigation commands (Lock within session)
+  React.useEffect(() => {
+    if (!user) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!(window as any).alco_is_exiting) {
+        e.preventDefault();
+        e.returnValue = "Sesi APK Aktif. Silakan gunakan tombol Keluar Aplikasi di sidebar untuk menutup.";
+        return e.returnValue;
+      }
+    };
+
+    // Push state and listen to popstate to intercept back/forward events
+    window.history.pushState(null, "", window.location.href);
+    const handlePopState = () => {
+      if (!(window as any).alco_is_exiting) {
+        window.history.pushState(null, "", window.location.href);
+        // Dispatch custom global event or trigger standard alert/toast warning
+        const event = new CustomEvent("alco_unauthorized_navigation_popup");
+        window.dispatchEvent(event);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [user]);
+
+
 
   if (authLoading || brandingLoading || onboardingStatus.loading) return <div className="h-screen w-full flex flex-col items-center justify-center bg-background text-foreground font-heading" id="loading-spinner">
     <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center animate-pulse mb-4 overflow-hidden">
@@ -59,6 +163,163 @@ function AppContent() {
         </main>
       </div>
       <Toaster theme="system" closeButton richColors />
+ 
+      {/* 2. CORE OBLIGATORY API KEY BARRIER FOR CLIENT PARTNER/GUEST ACCOUNTS */}
+      {!hasApiKey && !keyLoading && user && (
+        <div 
+          className="fixed inset-0 z-[99999] bg-slate-950/75 backdrop-blur-3xl flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300"
+          id="mandatory-api-key-gate"
+        >
+          <div className="w-full max-w-lg bg-card/95 hover:bg-card border border-border shadow-2xl p-8 md:p-10 space-y-6 relative text-left rounded-[2.5rem]">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-500 via-amber-500 to-indigo-600" />
+            
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center text-red-500 font-bold shrink-0">
+                <Lock className="w-6 h-6 animate-[bounce_2s_infinite]" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                  <h3 className="font-heading font-black text-xl text-foreground uppercase tracking-tight">
+                    API KEY MANDATORI AKTIF ⚠️
+                  </h3>
+                </div>
+                <p className="text-[11px] text-muted-foreground/85 font-black uppercase tracking-widest leading-none">
+                  Akses Terbuka Hanya dengan Token Pribadi
+                </p>
+              </div>
+            </div>
+ 
+            <div className="pt-2 border-t border-border/60 space-y-5 text-left">
+              <p className="text-xs text-muted-foreground leading-relaxed font-semibold">
+                Sistem mendeteksi Anda masuk sebagai <strong className="text-foreground">{user.displayName}</strong> ({user.email || 'Brand Anda'}).
+                Sesuai kebijakan performa, <strong className="text-primary font-black uppercase tracking-wide">Anda wajib menyediakan Gemini API Key milik Anda sendiri</strong> untuk mengaktifkan fungsionalitas kecerdasan buatan secara penuh di sistem ini.
+              </p>
+ 
+              {/* Informative Steps to fetch credentials */}
+              <div className="bg-secondary/40 border border-border/80 rounded-2xl p-4.5 space-y-3">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-[#6366f1] text-left">
+                  CARA MENDAPATKAN API KEY GRATIS (3 LANGKAH):
+                </h4>
+                <div className="space-y-2.5">
+                  <div className="flex gap-2.5 text-left">
+                    <span className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/15 text-indigo-600 text-[9px] font-black flex items-center justify-center shrink-0">1</span>
+                    <p className="text-[11px] text-muted-foreground font-medium leading-relaxed">
+                      Buka portal resmi <button onClick={() => window.open("https://aistudio.google.com/app/apikey", "_blank")} className="text-indigo-500 hover:underline inline-flex items-center gap-1 font-bold cursor-pointer">Google AI Studio <ExternalLink className="w-3 h-3" /></button> secara gratis.
+                    </p>
+                  </div>
+                  <div className="flex gap-2.5 text-left">
+                    <span className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/15 text-indigo-600 text-[9px] font-black flex items-center justify-center shrink-0">2</span>
+                    <p className="text-[11px] text-muted-foreground font-medium leading-relaxed">
+                      Klik <span className="font-bold text-foreground">"Create API Key"</span>, lalu salin kodenya.
+                    </p>
+                  </div>
+                  <div className="flex gap-2.5 text-left">
+                    <span className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/15 text-indigo-600 text-[9px] font-black flex items-center justify-center shrink-0">3</span>
+                    <p className="text-[11px] text-muted-foreground font-semibold leading-relaxed">
+                      Tempelkan kuncinya pada kolom di bawah ini dan klik Hubungkan. Seluruh fitur akan otomatis tebuka permanen!
+                    </p>
+                  </div>
+                </div>
+              </div>
+ 
+              {/* API Key Form */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-foreground block">
+                  Tempelkan Gemini API Key Anda Disini
+                </label>
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="Masukkan API Key Anda..."
+                  className="w-full bg-secondary/80 border border-border rounded-xl px-4 py-3.5 text-xs font-mono focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-all text-foreground tracking-widest placeholder:tracking-normal"
+                />
+                <span className="text-[9.5px] text-muted-foreground/80 block leading-relaxed italic">
+                  🔒 Keamanan Terjamin: Kunci API hanya disimpan di browser lokal serta didelegasikan aman lewat proxy Firestore pengguna.
+                </span>
+              </div>
+ 
+              <div className="flex gap-3 pt-2">
+                <Button
+                  onClick={async () => {
+                    const trimmed = keyInput.trim();
+                    if (!trimmed) {
+                      toast.error("Format API Key kosong!");
+                      return;
+                    }
+ 
+                    setKeySaving(true);
+                    try {
+                      // Actual connectivity and verification check to Gemini API via server proxy
+                      const testRes = await fetch("/api/ai/generate", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          "X-Gemini-API-Key": trimmed,
+                          "Authorization": "Bearer local-mock-token"
+                        },
+                        body: JSON.stringify({
+                          prompt: "Verify this API key. Respond with exactly 'valid' string inside JSON.",
+                          systemInstruction: "Respond with active status."
+                        })
+                      });
+
+                      if (!testRes.ok) {
+                        const errBody = await testRes.json().catch(() => ({}));
+                        throw new Error(errBody.message || errBody.error || "Uji konektivitas ke layanan Gemini ditolak.");
+                      }
+
+                      // 1. Save to localStorage
+                      localStorage.setItem("alco_gemini_api_key", trimmed);
+                      
+                      // 2. Securely store to back-end profile database for persistent login failover
+                      await saveUserConfig({ geminiApiKey: trimmed, isDemoMode: false });
+                      
+                      setHasApiKey(true);
+                      window.dispatchEvent(new Event("alco_api_key_changed"));
+                      toast.success("Aktivasi Sukses!", {
+                        description: "Kunci API Gemini telah dikonfigurasi dan disimpan aman luar-dalam pada profil sistem Anda!"
+                      });
+                    } catch (err: any) {
+                      console.error("Gagal mendaftarkan API Key:", err);
+                      toast.error("Verifikasi API Key Gagal!", {
+                        description: err.message || "Pastikan API Key Anda aktif dan memiliki kuota yang cukup."
+                      });
+                    } finally {
+                      setKeySaving(false);
+                    }
+                  }}
+                  disabled={keySaving}
+                  className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {keySaving ? (
+                     <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                     <Zap className="w-4 h-4 fill-current animate-pulse" />
+                  )}
+                  Hubungkan API & Aktifkan
+                </Button>
+
+                <Button
+                  variant="outline"
+                  title="Keluar Sesi / Sign Out"
+                  onClick={() => {
+                    auth.signOut().then(() => {
+                      localStorage.removeItem("alco_gemini_api_key");
+                      window.dispatchEvent(new Event("alco_api_key_changed"));
+                    });
+                  }}
+                  className="h-12 px-4.5 border-border hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/20 text-muted-foreground text-xs font-black uppercase tracking-wide cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Keluar
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </BrowserRouter>
   );
 }

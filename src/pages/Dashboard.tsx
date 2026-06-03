@@ -1,113 +1,303 @@
 import React from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { TrendingUp, Users, Package, Search, ArrowUpRight, Zap, Plus, ChevronRight, Loader2, Download, Upload, Trash2, X } from "lucide-react";
-import { auth, db } from "../lib/firebase";
+import { TrendingUp, Users, Package, Search, ArrowUpRight, Zap, Plus, ChevronRight, Loader2, FileDown, FileUp, FolderInput, Trash2, X, ChevronDown, ChevronUp, Key } from "lucide-react";
+import { auth, db, collection, query, where, getDocs, addDoc, serverTimestamp, doc, deleteDoc, updateDoc } from "../lib/firebase";
 import { Button } from "../components/ui/button";
-import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "../lib/utils";
 import { useBranding } from "@/contexts/BrandingContext";
+import { saveUserConfig, getUserConfig } from "../services/aiService";
+
+function DoubleDeleteButton({ 
+  projectId, 
+  projectName, 
+  onDeleteSuccess 
+}: { 
+  projectId: string; 
+  projectName: string; 
+  onDeleteSuccess: () => void 
+}) {
+  const [step, setStep] = React.useState<0 | 1 | 2>(0);
+  const [deleting, setDeleting] = React.useState(false);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (step === 0) {
+      setStep(1);
+      toast.info("Konfirmasi Penghapusan Pertama", {
+        description: `Apakah Anda benar-benar ingin menghapus "${projectName}"? Klik sekali lagi untuk melanjutkan.`
+      });
+      return;
+    }
+    if (step === 1) {
+      setStep(2);
+      toast.warning("PERINGATAN AKHIIR!", {
+        description: `Proyek "${projectName}" akan dihapus permanen dari Firestore database!`
+      });
+      return;
+    }
+    
+    // Step is 2 - Final Execution
+    setDeleting(true);
+    try {
+      await deleteDoc(doc(db, "projects", projectId));
+      toast.success(`Proyek "${projectName}" berhasil dihapus secara permanen.`);
+      onDeleteSuccess();
+    } catch (error) {
+      console.error(error);
+      toast.error("Gagal menghapus proyek.");
+      setStep(0); // Reset on error
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleCancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStep(0);
+    toast.dismiss();
+    toast.success("Penghapusan dibatalkan.");
+  };
+
+  if (step === 0) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Hapus Proyek Permanen"
+        onClick={handleDelete}
+        className="w-8 h-8 rounded-lg hover:bg-rose-500/15 hover:text-rose-600 transition-colors text-rose-500/75 cursor-pointer ml-1"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </Button>
+    );
+  }
+
+  return (
+    <div 
+      className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 px-1.5 py-1 rounded-xl animate-in fade-in zoom-in-95 duration-200 ml-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={handleDelete}
+        disabled={deleting}
+        className={cn(
+          "h-7 px-2.5 rounded-lg text-[8px] font-black uppercase tracking-wider text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm",
+          step === 1 ? "bg-amber-600 hover:bg-amber-500 active:scale-[0.98]" : "bg-red-600 hover:bg-red-500 animate-pulse active:scale-[0.98]"
+        )}
+      >
+        {deleting ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : step === 1 ? (
+          <span>YUK YAKIN?</span>
+        ) : (
+          <span>SANGAT YAKIN?</span>
+        )}
+      </button>
+
+      <button
+        onClick={handleCancel}
+        disabled={deleting}
+        className="w-6 h-6 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+        title="Batal"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const user = auth.currentUser;
   const navigate = useNavigate();
   const { config } = useBranding();
   const [projects, setProjects] = React.useState<any[]>([]);
-  const [deleteConfirm, setDeleteConfirm] = React.useState<{[key: string]: number}>({});
-
-  const handleExportProject = (e: React.MouseEvent, proj: any) => {
-    e.stopPropagation();
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(proj, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `project_${proj.name || 'export'}.json`);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-    toast.success(`Project "${proj.name}" Berhasil Di-export!`);
-  };
-
-  const handleImportProject = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const imported = JSON.parse(event.target?.result as string);
-        if (!imported || typeof imported !== 'object') {
-          throw new Error("Invalid format");
-        }
-        
-        if (!user) {
-          toast.error("Anda harus login terlebih dahulu.");
-          return;
-        }
-
-        const { id, createdAt, updatedAt, userId, ...cleanData } = imported;
-        
-        const docRef = await addDoc(collection(db, "projects"), {
-          ...cleanData,
-          userId: user.uid,
-          name: cleanData.name ? `${cleanData.name} (Import)` : "Imported Project",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        
-        const newProj = {
-          id: docRef.id,
-          userId: user.uid,
-          ...cleanData,
-          name: cleanData.name ? `${cleanData.name} (Import)` : "Imported Project"
-        };
-        
-        setProjects(prev => [newProj, ...prev]);
-        toast.success("Progress Project Berhasil Di-import!");
-      } catch (err) {
-        toast.error("Format file tidak valid. Mohon gunakan file JSON export yang valid.");
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleDeleteProject = async (e: React.MouseEvent, projectId: string) => {
-    e.stopPropagation();
-    
-    const confirmState = deleteConfirm[projectId] || 0;
-    
-    if (confirmState === 0) {
-      setDeleteConfirm(prev => ({ ...prev, [projectId]: 1 }));
-      toast.warning("Klik sekali lagi untuk konfirmasi penghapusan (Konfirmasi 1/2)");
-      return;
-    }
-    
-    if (confirmState === 1) {
-      setDeleteConfirm(prev => ({ ...prev, [projectId]: 2 }));
-      toast.error("Klik terakhir untuk menghapus project secara permanen! (Konfirmasi 2/2)");
-      return;
-    }
-    
-    if (confirmState === 2) {
-      try {
-        const docRef = doc(db, "projects", projectId);
-        await deleteDoc(docRef);
-        setProjects(prev => prev.filter(p => p.id !== projectId));
-        setDeleteConfirm(prev => {
-          const updated = { ...prev };
-          delete updated[projectId];
-          return updated;
-        });
-        toast.success("Project Berhasil Dihapus!");
-      } catch (err: any) {
-        console.error("Delete error:", err);
-        toast.error("Gagal menghapus project: " + err.message);
-      }
-    }
-  };
   const [loading, setLoading] = React.useState(true);
   const [creating, setCreating] = React.useState(false);
   const [showApiNotice, setShowApiNotice] = React.useState(true);
+  const [isDevActive, setIsDevActive] = React.useState(localStorage.getItem("alco_developer_mode_active") === "true");
+  const [isOnboardingCollapsed, setIsOnboardingCollapsed] = React.useState(() => localStorage.getItem("isOnboardingCollapsed") === "true");
+  
+  const [localApiKey, setLocalApiKey] = React.useState<string>(() => localStorage.getItem("alco_gemini_api_key") || "");
+  const [keyInput, setKeyInput] = React.useState("");
+  const [showActivationPanel, setShowActivationPanel] = React.useState(false);
+  
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const [selectedProjectIds, setSelectedProjectIds] = React.useState<string[]>([]);
+  const [bulkDeleteStep, setBulkDeleteStep] = React.useState<0 | 1 | 2>(0);
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
+
+  const toggleProjectSelection = (projectId: string) => {
+    setSelectedProjectIds(prev => {
+      if (prev.includes(projectId)) {
+        return prev.filter(id => id !== projectId);
+      } else {
+        return [...prev, projectId];
+      }
+    });
+    // Reset bulk delete confirmation if selection changes
+    setBulkDeleteStep(0);
+  };
+
+  const handleImportProjectFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const jsonContent = JSON.parse(event.target?.result as string);
+        if (!jsonContent) {
+          throw new Error("Format berkas kosong atau tidak valid.");
+        }
+
+        const projectsToImport = Array.isArray(jsonContent) ? jsonContent : [jsonContent];
+        if (projectsToImport.length === 0) {
+          throw new Error("Tidak ada proyek yang ditemukan di berkas.");
+        }
+
+        let importCount = 0;
+        for (const item of projectsToImport) {
+          if (!item || typeof item !== "object") continue;
+
+          const projectName = item.name || "Imported Project";
+          const currentStep = item.currentStep || 1;
+
+          const newProject: any = {
+             ...item,
+             userId: user?.uid || "mock-userId",
+             name: projectName,
+             currentStep: currentStep,
+             createdAt: serverTimestamp(),
+             updatedAt: serverTimestamp(),
+          };
+
+          delete newProject.id;
+          await addDoc(collection(db, "projects"), newProject);
+          importCount++;
+        }
+
+        toast.success(`Berhasil meng-import ${importCount} proyek ke sistem Anda!`);
+        setSelectedProjectIds([]);
+        fetchProjects();
+      } catch (err: any) {
+        toast.error("Format data file salah! Gagal meng-import proyek.", {
+          description: err.message || "Pastikan mengunggah file JSON progress yang valid."
+        });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleExportProject = (project: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      const exportData = { ...project };
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify(exportData, null, 2)
+      )}`;
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", jsonString);
+      downloadAnchor.setAttribute("download", `${project.name.toLowerCase().replace(/\s+/g, "_")}_progress.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      toast.success("Progress proyek berhasil di-ekspor!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal mengekspor progress proyek.");
+    }
+  };
+
+  const handleExportSelectedProjects = () => {
+    if (selectedProjectIds.length === 0) {
+      toast.error("Silakan pilih minimal satu proyek untuk di-ekspor.");
+      return;
+    }
+
+    try {
+      const selectedProjectsList = projects.filter(p => selectedProjectIds.includes(p.id));
+      const exportData = selectedProjectsList.length === 1 ? selectedProjectsList[0] : selectedProjectsList;
+      
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify(exportData, null, 2)
+      )}`;
+      
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", jsonString);
+      
+      const filename = selectedProjectsList.length === 1 
+        ? `${selectedProjectsList[0].name.toLowerCase().replace(/\s+/g, "_")}_progress.json`
+        : `alco_export_bundle_${selectedProjectsList.length}_projects.json`;
+        
+      downloadAnchor.setAttribute("download", filename);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      toast.success(`Berhasil mengekspor ${selectedProjectsList.length} proyek terpilih!`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal mengekspor proyek terpilih.");
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedProjectIds.length === 0) return;
+
+    if (bulkDeleteStep === 0) {
+      setBulkDeleteStep(1);
+      toast.info("Konfirmasi Penghapusan Masal Pertama", {
+        description: `Apakah Anda benar-benar ingin menghapus ${selectedProjectIds.length} proyek terpilih? Klik tombol sekali lagi untuk memverifikasi.`
+      });
+      return;
+    }
+
+    if (bulkDeleteStep === 1) {
+      setBulkDeleteStep(2);
+      toast.warning("PERINGATAN AKHIR MASAL!", {
+        description: `Seluruh (${selectedProjectIds.length}) proyek terpilih akan dihapus permanen dari Firestore database!`
+      });
+      return;
+    }
+
+    // Step 2: Final Bulk Execution
+    setBulkDeleting(true);
+    try {
+      let deletedCount = 0;
+      for (const id of selectedProjectIds) {
+        await deleteDoc(doc(db, "projects", id));
+        deletedCount++;
+      }
+      toast.success(`${deletedCount} proyek berhasil dihapus secara masal.`);
+      setSelectedProjectIds([]);
+      setBulkDeleteStep(0);
+      fetchProjects();
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal menghapus beberapa proyek terpilih.");
+      setBulkDeleteStep(0);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const fetchProjects = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      const q = query(collection(db, "projects"));
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setProjects(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
   React.useEffect(() => {
     // Show welcome toast about API Key
@@ -122,21 +312,115 @@ export default function Dashboard() {
   }, []);
 
   React.useEffect(() => {
-    const fetchProjects = async () => {
-      if (!user) return;
-      try {
-        const q = query(collection(db, "projects"), where("userId", "==", user.uid));
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setProjects(data);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchProjects();
-  }, [user]);
+
+    const checkAuth = () => {
+      setIsDevActive(localStorage.getItem("alco_developer_mode_active") === "true");
+      fetchProjects();
+    };
+
+    window.addEventListener("alco_developer_auth_changed", checkAuth);
+    return () => {
+      window.removeEventListener("alco_developer_auth_changed", checkAuth);
+    };
+  }, [fetchProjects]);
+
+  const handleEditProjectName = async (projectId: string, currentName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newName = prompt("Masukkan nama proyek baru:", currentName);
+    if (!newName || newName.trim() === "") return;
+    try {
+      const docRef = doc(db, "projects", projectId);
+      await updateDoc(docRef, { name: newName });
+      toast.success("Nama proyek berhasil diperbarui!");
+      fetchProjects();
+    } catch (error) {
+      console.error(error);
+      toast.error("Gagal mengganti nama proyek");
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Apakah Anda yakin ingin menghapus proyek ini?")) return;
+    try {
+      const dbState = JSON.parse(localStorage.getItem("alco_local_db") || "{}");
+      delete dbState[`projects/${projectId}`];
+      localStorage.setItem("alco_local_db", JSON.stringify(dbState));
+      toast.success("Proyek berhasil dinonaktifkan / dihapus");
+      fetchProjects();
+    } catch (error) {
+      console.error(error);
+      toast.error("Gagal menghapus proyek");
+    }
+  };
+
+  // Remix Wizard States
+  const [remixingProject, setRemixingProject] = React.useState<any | null>(null);
+  const [wizardStep, setWizardStep] = React.useState(1);
+  const [wizardName, setWizardName] = React.useState("");
+  const [wizardNiche, setWizardNiche] = React.useState("");
+  const [wizardAudience, setWizardAudience] = React.useState("");
+  const [wizardTone, setWizardTone] = React.useState("Premium Executive");
+  const [wizardApiKey, setWizardApiKey] = React.useState("");
+  const [hasExistingKey, setHasExistingKey] = React.useState(false);
+
+  const openRemixWizard = async (project: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRemixingProject(project);
+    setWizardStep(1);
+    setWizardName(`${project.name} (Remix)`);
+    setWizardNiche(project.nicheData?.selectedOption?.name || "Premium Digital Asset");
+    setWizardAudience(project.nicheData?.selectedOption?.description || "High-value online entrepreneurs");
+    setWizardTone("Premium Executive");
+    setWizardApiKey("");
+    setHasExistingKey(false);
+
+    try {
+      const configRes = await getUserConfig();
+      if (configRes && configRes.hasApiKey) {
+        setHasExistingKey(true);
+        setWizardApiKey("••••••••••••••••••••••••••••••••");
+      }
+    } catch (err) {
+      console.warn("Gagal mengambil konfigurasi awal:", err);
+    }
+  };
+
+  const executeRemixWorkflow = async () => {
+    if (!remixingProject || !user) return;
+    setCreating(true);
+    try {
+      // 1. If user input a new API Key, save it securely to their user profile
+      if (wizardApiKey && wizardApiKey !== "••••••••••••••••••••••••••••••••") {
+        await saveUserConfig({ geminiApiKey: wizardApiKey, isDemoMode: false });
+        toast.success("Kunci API Gemini Anda berhasil direkam seutuhnya.");
+      }
+
+      // Deep clone project and reinitialize ownership mapping
+      const cloned = JSON.parse(JSON.stringify(remixingProject));
+      
+      // Update with new setup wizard details
+      cloned.name = wizardName || `${remixingProject.name} (Remix)`;
+      cloned.userId = user.uid; // Critical: Transfers ownership so token is user's own credit
+      
+      cloned.createdAt = new Date().toISOString();
+      cloned.updatedAt = new Date().toISOString();
+      
+      // Remove previous identifier
+      delete cloned.id;
+
+      await addDoc(collection(db, "projects"), cloned);
+      toast.success("Sukses! Proyek berhasil di-Remix & diakuisisi ke token Anda.");
+      setRemixingProject(null);
+      fetchProjects();
+    } catch (error) {
+      console.error(error);
+      toast.error("Gagal menjalankan Remix Wizard");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const handleCreateProject = async () => {
     if (!user) return;
@@ -162,103 +446,398 @@ export default function Dashboard() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-12">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-        <div>
-          <p className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-3 font-heading">{config.brandName} Ecosystem Entry</p>
-          <h1 className="text-5xl font-heading font-black tracking-tighter text-foreground leading-[1.1]">
-            Greetings, <span className="text-primary">{user?.displayName?.split(' ')[0] || "Strategist"}</span>.
+      {/* Premium Positioning Header */}
+      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-border/40 pb-8">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full">
+            <span className="w-1.5 h-1.5 bg-primary rounded-full animate-ping" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-primary">Sistem Jualan Digital AI Terpadu</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-heading font-black tracking-tight text-foreground leading-[1.1] text-left">
+            Siap Mulai Jualan, <span className="text-primary">{user?.displayName?.split(' ')[0] || "Partner"}</span>?
           </h1>
-          <div className="flex items-center gap-3 mt-4">
-             <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600">Unified Cloud Sync Active</span>
-             </div>
-             <div className="flex items-center gap-2 px-3 py-1 bg-orange-500/10 border border-orange-500/20 rounded-full cursor-pointer hover:bg-orange-500/20 transition-all" onClick={() => toast.info("API Key Mode", { description: "Gunakan API Key Pribadi untuk kuota tak terbatas." })}>
-                <Zap className="w-3 h-3 text-orange-500" />
-                <span className="text-[8px] font-black uppercase tracking-widest text-orange-600">Personal API Key Mode</span>
-             </div>
-          </div>
-          <div className="mt-4 space-y-1">
-            <p className="text-muted-foreground text-lg font-medium opacity-80 italic uppercase">{config.dashboardText}</p>
-            <p className="text-[10px] font-black text-primary/40 uppercase tracking-[0.4em]">{config.tagline}</p>
-          </div>
+          <p className="text-muted-foreground text-sm font-medium max-w-xl text-left">
+            Selamat datang di hub kontrol bisnis Anda. Ubah ide dasar menjadi produk digital premium serta materi campaign Meta Ads berkonversi tinggi dalam hitungan menit—tanpa pusing coding maupun riset manual.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <div className="relative">
-            <input 
-              type="file" 
-              id="dashboard-import-project"
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
-              onChange={handleImportProject}
-              accept=".json"
-            />
-            <Button 
-              variant="outline"
-              id="btn-import-project-dash"
-              className="h-14 px-6 rounded-2xl border-border bg-slate-100 dark:bg-zinc-900 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all font-black text-xs uppercase tracking-widest flex items-center gap-2"
-            >
-              <Upload className="w-5 h-5 text-primary" />
-              Import Project
-            </Button>
-          </div>
+
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto shrink-0 pt-2 lg:pt-0">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept=".json" 
+            onChange={handleImportProjectFile} 
+          />
+          <Button 
+            variant="outline"
+            onClick={() => {
+              setKeyInput(localApiKey);
+              setShowActivationPanel(!showActivationPanel);
+            }}
+            className={cn(
+              "h-12 px-4 rounded-xl border text-foreground text-xs font-bold flex items-center gap-2.5 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] bg-background hover:bg-secondary/80",
+              localApiKey ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400" : "border-indigo-500/30 text-indigo-600 dark:text-indigo-400"
+            )}
+          >
+            <Key className={cn("w-4 h-4", localApiKey ? "text-emerald-500 fill-emerald-500/10" : "text-indigo-500")} />
+            <span className="uppercase tracking-wider">
+              API: {localApiKey ? "Aktif 🟢" : "Belum Aktif ⚡"}
+            </span>
+          </Button>
+
+          <Button 
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            className="h-12 px-5 bg-secondary/60 hover:bg-secondary border-border/80 text-foreground rounded-xl font-bold flex items-center gap-2.5 text-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all uppercase tracking-wider"
+          >
+            <FolderInput className="w-4 h-4 text-primary" />
+            Unggah Berkas Proyek
+          </Button>
 
           <Button 
             disabled={creating}
             onClick={handleCreateProject}
-            id="btn-create-project-dash"
-            className="h-14 px-8 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center gap-3 uppercase tracking-widest text-xs w-full md:w-auto"
+            className="h-12 px-6 bg-primary text-white hover:bg-primary/95 rounded-xl font-extrabold shadow-lg shadow-primary/25 flex items-center gap-2 text-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all uppercase tracking-wider"
           >
-            {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-            Start Unified Workflow
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            Mulai Proyek Jualan Baru
           </Button>
         </div>
       </header>
 
-      {/* API Key Notice Banner */}
-      {showApiNotice && (
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-primary/5 border border-primary/20 rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden group shadow-xl shadow-primary/5"
-        >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full -mr-32 -mt-32 blur-3xl opacity-20" />
-          <div className="flex items-center gap-4 relative z-10">
-            <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center border border-primary/30 shadow-inner">
-              <Zap className="w-7 h-7 text-primary animate-pulse" />
+      {/* Lightweight & Compact Collapsible API Settings Panel */}
+      {showActivationPanel && (
+        <div className="bg-card border border-border shadow-xl rounded-3xl p-6 max-w-2xl mx-auto animate-in fade-in slide-in-from-top-4 duration-300 text-left relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-emerald-500" />
+          
+          <div className="flex items-center justify-between mb-4 border-b border-border/50 pb-3">
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4 text-primary" />
+              <h3 className="font-heading font-black text-sm text-foreground uppercase tracking-tight">Konfigurasi Gemini API Key Anda</h3>
             </div>
-            <div>
-              <h3 className="text-xl font-heading font-black uppercase tracking-tight text-foreground flex items-center gap-2">
-                Unified API Access Mode
-                <span className="bg-primary text-white text-[8px] px-2 py-0.5 rounded-full">RECOMMENDED</span>
-              </h3>
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.1em] opacity-80 mt-1 max-w-md">
-                Hubungkan Google Cloud Project Anda untuk akses tanpa batas ke Model Gemini 3 Pro & Flash.
-              </p>
+            <button 
+              onClick={() => setShowActivationPanel(false)} 
+              className="text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer uppercase tracking-wider"
+            >
+              × Tutup
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground leading-relaxed font-semibold">
+              Kunci API gratis dari Google AI Studio digunakan untuk mengaktifkan generator robot jualan AI cerdas. Data kunci ini langsung disimpan di browser & profil pribadi Anda seutuhnya.
+            </p>
+
+            <div className="p-4 bg-slate-50 border border-border/80 rounded-2xl space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-black uppercase tracking-widest text-foreground">Kunci API Gemini</label>
+                <button
+                  type="button"
+                  onClick={() => window.open("https://aistudio.google.com/app/apikey", "_blank")}
+                  className="text-[10px] font-black text-indigo-600 hover:text-indigo-500 hover:underline flex items-center gap-1 cursor-pointer select-none"
+                >
+                  Dapatkan Key Gratis <ArrowUpRight className="w-3 h-3" />
+                </button>
+              </div>
+              
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="Masukkan Gemini API Key..."
+                  className="flex-1 bg-white border border-border rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-all text-foreground tracking-widest"
+                />
+                <Button
+                  onClick={async () => {
+                    const trimmed = keyInput.trim();
+                    if (!trimmed) {
+                      toast.error("Kolom API Key tidak boleh kosong!");
+                      return;
+                    }
+                    try {
+                      localStorage.setItem("alco_gemini_api_key", trimmed);
+                      setLocalApiKey(trimmed);
+                      await saveUserConfig({ geminiApiKey: trimmed, isDemoMode: false });
+                      window.dispatchEvent(new Event("alco_api_key_changed"));
+                      setShowActivationPanel(false);
+                      toast.success("Aktivasi AI Sukses!", {
+                        description: "Kunci API Gemini Anda sudah aktif dan dikonfigurasi aman."
+                      });
+                    } catch (err: any) {
+                      toast.error(`Aksi Gagal: ${err.message}`);
+                    }
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-extrabold text-xs uppercase tracking-wider px-4 cursor-pointer"
+                >
+                  Simpan Key
+                </Button>
+              </div>
             </div>
+
+            {localApiKey && (
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10">
+                <span>Status Koneksi: <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold">TERHUBUNG & AKTIF 🟢</strong></span>
+                <button
+                  onClick={async () => {
+                    if (confirm("Apakah Anda yakin ingin menghapus API Key ini dari akun Anda?")) {
+                      localStorage.removeItem("alco_gemini_api_key");
+                      setLocalApiKey("");
+                      setKeyInput("");
+                      try {
+                        await saveUserConfig({ geminiApiKey: null, isDemoMode: true });
+                        window.dispatchEvent(new Event("alco_api_key_changed"));
+                      } catch (e) {}
+                      setShowActivationPanel(false);
+                      toast.success("API Key dihapus dari sistem.");
+                    }
+                  }}
+                  className="text-rose-500 hover:text-rose-600 font-black uppercase tracking-wider text-[10px] cursor-pointer"
+                >
+                  Hapus API Key
+                </button>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-3 relative z-10 w-full md:w-auto">
-            <Button 
-              onClick={() => {
-                window.location.href = "/onboarding";
-              }}
-              className="w-full md:w-auto rounded-xl bg-primary text-white hover:bg-primary/90 text-[10px] font-black uppercase tracking-widest h-12 px-8 shadow-lg shadow-primary/20"
-            >
-              Aktifkan API Saya
-            </Button>
-            <Button 
-              onClick={() => setShowApiNotice(false)}
-              variant="ghost" 
-              size="icon" 
-              className="rounded-xl hover:bg-primary/10 h-12 w-12"
-            >
-              <Users className="w-5 h-5 opacity-40" />
-            </Button>
-          </div>
-        </motion.div>
+        </div>
       )}
 
+      {/* Dynamic Tiny Notice when API Key is missing and not whitelist/owner */}
+      {!localApiKey && (
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping" />
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+              Sistem terhubung menggunakan kuota bawaan server. Disarankan mendaftarkan Gemini API Key mandiri Anda untuk performa stabil & penulisan tanpa batas.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setKeyInput("");
+              setShowActivationPanel(true);
+            }}
+            className="h-8 rounded-xl border-amber-500/30 text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-black uppercase tracking-wide cursor-pointer"
+          >
+            Aktifkan API Key Mandiri
+          </Button>
+        </div>
+      )}
+
+      {/* Onboarding Guide Card for Novice Marketers */}
+      <div className={cn(
+        "bg-gradient-to-br from-primary/5 via-secondary/40 to-background border border-primary/10 rounded-[2rem] text-left transition-all duration-300",
+        isOnboardingCollapsed ? "p-5 space-y-0" : "p-6 md:p-8 space-y-6"
+      )}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <span className="text-[9px] font-black text-primary uppercase tracking-[0.25em] block mb-1">Panduan Pemula (Instant Onboarding)</span>
+            <h2 className={cn("font-heading font-black tracking-tight text-foreground transition-all duration-300", isOnboardingCollapsed ? "text-lg" : "text-2xl")}>
+              🚀 Alur 3 Langkah Menuju Penjualan Pertama Anda
+            </h2>
+            {!isOnboardingCollapsed && (
+              <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                Sistem ini memandu Anda secara otomatis dan terarah. Ikuti rute linear di bawah ini:
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {!isOnboardingCollapsed && (
+              <>
+                <span className="text-xs font-semibold text-muted-foreground">Butuh Kuota Gratis?</span>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full" title="Server kami menyediakan kuota default untuk kenyamanan uji coba">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600">Kuota Server Siap Pakai</span>
+                </div>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const nv = !isOnboardingCollapsed;
+                setIsOnboardingCollapsed(nv);
+                localStorage.setItem("isOnboardingCollapsed", String(nv));
+              }}
+              className="h-8 px-3 rounded-xl border border-border/80 bg-background hover:bg-secondary/80 text-foreground text-[10px] font-black uppercase tracking-wide flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-sm"
+            >
+              {isOnboardingCollapsed ? (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5 text-primary" /> Buka Panduan
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5 text-primary" /> Sembunyikan
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {!isOnboardingCollapsed && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+              {/* Step 1 */}
+              <div className="p-5 bg-card/60 backdrop-blur-sm border border-border/60 rounded-2xl flex flex-col justify-between space-y-4 hover:border-primary/20 transition-all group">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 font-heading font-black flex items-center justify-center text-sm border border-blue-500/15 shrink-0">
+                      1
+                    </div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Riset & Validasi Model Bisnis</h4>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed font-medium">
+                    AI membantu Anda meriset ceruk pasar (niche), merumuskan profil target pelanggan impian, menganalisis emosi pembeli, dan menciptakan posisi nilai produk yang bernilai tinggi di hadapan konsumen.
+                  </p>
+                </div>
+                <div className="text-[9px] text-primary/75 font-black uppercase tracking-widest flex items-center gap-1">
+                  Hasil: PDF Strategi Jualan & Formula Niche
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="p-5 bg-card/60 backdrop-blur-sm border border-border/60 rounded-2xl flex flex-col justify-between space-y-4 hover:border-primary/20 transition-all group">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-500 font-heading font-black flex items-center justify-center text-sm border border-pink-500/15 shrink-0">
+                      2
+                    </div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Bentuk Identitas Brand</h4>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed font-semibold">
+                    Tentukan nama produk, persona komunikasi bisnis, visual branding, dan susunan paket penawaran (offers) menawan yang membuat pembeli rela membayar lebih mahal dibanding produk saingan.
+                  </p>
+                </div>
+                <div className="text-[9px] text-primary/75 font-black uppercase tracking-widest flex items-center gap-1">
+                  Hasil: Logo, Brand Voice, & Paket Penawaran
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="p-5 bg-card/60 backdrop-blur-sm border border-border/60 rounded-2xl flex flex-col justify-between space-y-4 hover:border-primary/20 transition-all group">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 font-heading font-black flex items-center justify-center text-sm border border-emerald-500/15 shrink-0">
+                      3
+                    </div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Hasilkan Iklan Meta Ads</h4>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed font-medium">
+                    Generate otomatis ribuan variasi copywriting iklan kelas dunia, naskah video UGC (User Generated Content), skrip visual Carousel, serta panduan pasang campaign langsung ke dalam Ads Manager!
+                  </p>
+                </div>
+                <div className="text-[9px] text-primary/75 font-black uppercase tracking-widest flex items-center gap-1">
+                  Hasil: Skrip Ads, Gambar Iklan, & Strategi Laris
+                </div>
+              </div>
+            </div>
+
+            {/* Tips for Beginners */}
+            <div className="p-3.5 bg-primary/5 rounded-xl border border-primary/10 flex items-start gap-3">
+              <div className="p-1 bg-primary/10 rounded-lg text-primary shrink-0 mt-0.5">
+                <Zap className="w-3.5 h-3.5 text-primary" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[8.5px] font-black uppercase tracking-wider text-primary block">💡 Kiat Sukses Menggunakan Asisten:</span>
+                <p className="text-xs text-muted-foreground leading-relaxed font-semibold">
+                  Belum punya ide produk digital? Tenang! Cukup klik salah satu <strong className="text-foreground font-bold">Template Contoh Premium (Templet)</strong> di bawah ini, klik ikon <strong className="text-indigo-600 font-bold">Remix / Klon Proyek</strong> untuk menduplikatnya, dan pelajari format suksesnya seketika!
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Grid of Projects */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+      <div className="pt-2">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div className="text-left">
+            <h3 className="text-xl font-heading font-black tracking-tight">Katalog Proyek & Kampanye Jualan Anda</h3>
+            <p className="text-xs text-muted-foreground font-medium">Kelola seluruh validasi bisnis dan rencana eksekusi Meta Ads Anda disini</p>
+          </div>
+
+          {/* Bulk Action Panel - Fades in dynamically */}
+          <AnimatePresence>
+            {selectedProjectIds.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                className="flex items-center gap-2 bg-primary/5 border border-primary/20 px-4 py-2 rounded-2xl shadow-lg shrink-0 w-full sm:w-auto justify-between sm:justify-start"
+              >
+                <div className="flex items-center gap-2 text-left">
+                  <span className="w-2.5 h-2.5 bg-primary rounded-full animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-primary">
+                    {selectedProjectIds.length} Terpilih
+                  </span>
+                </div>
+
+                <div className="h-4 w-px bg-primary/20 mx-1 hidden sm:block" />
+
+                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleExportSelectedProjects}
+                    className="h-8 px-2.5 rounded-lg border-primary/20 text-[10px] font-black uppercase tracking-wider text-primary hover:bg-primary/10 flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    Ekspor
+                  </Button>
+
+                  {/* Double Confirmation Delete for Selected Projects */}
+                  {bulkDeleteStep === 0 ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleBulkDelete}
+                      className="h-8 px-2.5 rounded-lg border-rose-500/20 text-[10px] font-black uppercase tracking-wider text-rose-600 hover:bg-rose-500/10 flex items-center gap-1 cursor-pointer transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Hapus
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 px-1 py-1 rounded-lg animate-in fade-in zoom-in-95 duration-150">
+                      <button
+                        onClick={handleBulkDelete}
+                        disabled={bulkDeleting}
+                        className={cn(
+                          "h-6 px-2.5 rounded text-[8px] font-black uppercase tracking-wider text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm",
+                          bulkDeleteStep === 1 ? "bg-amber-600 hover:bg-amber-500" : "bg-red-600 hover:bg-red-500 animate-pulse"
+                        )}
+                      >
+                        {bulkDeleting ? (
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        ) : bulkDeleteStep === 1 ? (
+                          <span>Yakin Hapus?</span>
+                        ) : (
+                          <span>Benar-benar Yakin?</span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setBulkDeleteStep(0)}
+                        className="w-5 h-5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setSelectedProjectIds([])}
+                    className="text-[9px] font-bold text-muted-foreground hover:text-foreground px-2 cursor-pointer transition-colors"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
         {loading ? (
            [1, 2, 3].map(i => (
              <div key={i} className="h-64 bg-secondary/30 rounded-[2.5rem] animate-pulse" />
@@ -274,120 +853,240 @@ export default function Dashboard() {
                 onClick={() => navigate(`/wizard/${project.id}`)}
                 className="cursor-pointer group"
               >
-                <Card className="bg-card border-border shadow-md hover:shadow-2xl transition-all duration-500 rounded-[2.5rem] overflow-hidden border-b-4 border-b-transparent hover:border-b-primary relative">
+                <Card className={cn(
+                  "bg-card border-border shadow-md hover:shadow-2xl transition-all duration-500 rounded-[2.5rem] overflow-hidden border-b-4 relative",
+                  selectedProjectIds.includes(project.id) 
+                    ? "border-b-primary ring-2 ring-primary/40 bg-primary/[0.02] shadow-2xl" 
+                    : "border-b-transparent hover:border-b-primary"
+                )}>
                   <CardHeader className="p-8 pb-4 flex flex-row items-center justify-between">
-                    <div className="p-3 bg-secondary rounded-2xl group-hover:bg-primary transition-all duration-300">
-                      <Zap className="h-5 w-5 text-primary group-hover:text-white" />
+                    <div className="flex items-center gap-3">
+                      {/* Checkbox selector */}
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleProjectSelection(project.id);
+                        }}
+                        className={cn(
+                          "w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 z-10",
+                          selectedProjectIds.includes(project.id) 
+                            ? "bg-primary border-primary text-white scale-110 shadow-sm" 
+                            : "border-muted-foreground/35 hover:border-primary bg-background"
+                        )}
+                      >
+                        {selectedProjectIds.includes(project.id) && (
+                          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+
+                      <div className="p-3 bg-secondary rounded-2xl group-hover:bg-primary transition-all duration-300 shrink-0">
+                        <Zap className="h-5 w-5 text-primary group-hover:text-white" />
+                      </div>
                     </div>
                     
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        id={`btn-export-${project.id}`}
-                        onClick={(e) => handleExportProject(e, project)}
-                        className="h-8 w-8 rounded-lg hover:bg-primary/15 hover:text-primary transition-all text-muted-foreground"
-                        title="Export Project Progress"
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                      
-                      {/* Delete Flow with Double Confirmation */}
-                      <div className="flex items-center gap-1">
-                        {deleteConfirm[project.id] > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteConfirm(prev => ({ ...prev, [project.id]: 0 }));
-                            }}
-                            className="h-8 w-8 rounded-lg hover:bg-slate-200 text-slate-500"
-                            title="Batal"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
+                    <div className="flex items-center gap-2">
+                      {/* Export & Double-Delete Buttons (accessible without admin/developer mode) */}
+                      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {/* Export Button */}
                         <Button
-                          variant={deleteConfirm[project.id] === 2 ? "destructive" : deleteConfirm[project.id] === 1 ? "outline" : "ghost"}
-                          size={deleteConfirm[project.id] > 0 ? "sm" : "icon"}
-                          id={`btn-delete-${project.id}`}
-                          onClick={(e) => handleDeleteProject(e, project.id)}
-                          className={cn(
-                            "h-8 rounded-lg transition-all text-[9.5px] font-black uppercase tracking-wider",
-                            deleteConfirm[project.id] > 0 ? "px-2.5 h-8 gap-1" : "w-8 h-8 hover:bg-red-500/10 text-red-500 hover:text-red-600"
-                          )}
+                          variant="ghost"
+                          size="icon"
+                          title="Export Project ke JSON"
+                          onClick={(e) => handleExportProject(project, e)}
+                          className="w-8 h-8 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer text-muted-foreground/80 hover:scale-105 active:scale-95"
                         >
-                          {deleteConfirm[project.id] === 2 ? (
-                            <>SANGAT YAKIN?</>
-                          ) : deleteConfirm[project.id] === 1 ? (
-                            <>YUK YAKIN?</>
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
+                          <FileDown className="w-4 h-4" />
                         </Button>
+
+                        {/* Double-Confirmation Delete Button */}
+                        <DoubleDeleteButton 
+                          projectId={project.id} 
+                          projectName={project.name} 
+                          onDeleteSuccess={fetchProjects} 
+                        />
                       </div>
-                      
-                      <div className="flex items-center gap-1.5 ml-2">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Step</span>
-                        <span className="text-xl font-heading font-black text-foreground">{project.currentStep}/8</span>
-                      </div>
+
+                      <div className="h-6 w-px bg-border/60 shrink-0 mx-1" />
+
+                      {(() => {
+                        const stratStep = Math.max(1, Math.min(project.currentStep || 1, 9));
+                        const isBrandDone = !!project.brandFoundationData || project.currentStep >= 10;
+                        const isAdsDone = !!(project.adsRecommendationsState || project.adsGeneratedAngles) || project.currentStep >= 11;
+
+                        const stratMilestones = Math.min(stratStep, 8);
+                        const brandMilestone = isBrandDone ? 1 : 0;
+                        const adsMilestone = isAdsDone ? 1 : 0;
+                        
+                        const totalCompleted = stratMilestones + brandMilestone + adsMilestone;
+                        const completionPercentage = Math.round((totalCompleted / 10) * 100);
+
+                        return (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Sirkuit</span>
+                            <span className="text-xl font-heading font-black text-foreground">{completionPercentage}%</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </CardHeader>
                   <CardContent className="p-8 pt-4 space-y-6">
                     <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        {user && project.userId === user.uid ? (
+                          <span className="text-[8px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-500/15">
+                            Proyek Anda
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-black uppercase tracking-widest bg-indigo-500/10 text-indigo-600 px-2 py-0.5 rounded-full border border-indigo-500/15 animate-pulse">
+                            Templet (Klik untuk Remix)
+                          </span>
+                        )}
+                      </div>
                       <h3 className="text-2xl font-heading font-black tracking-tight text-foreground group-hover:text-primary transition-colors">{project.name}</h3>
                       <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] opacity-60 mt-1 truncate">
                         {project.nicheData?.selectedOption?.name || "Digital Asset Pipeline"}
                       </p>
                     </div>
-                    <div className="space-y-2">
-                       <div className="flex justify-between items-end">
-                          <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Completion Progress</span>
-                          <span className="text-sm font-heading font-black text-primary">{Math.round((project.currentStep / 8) * 100)}%</span>
-                       </div>
-                       <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-primary transition-all duration-1000" 
-                            style={{ width: `${(project.currentStep / 8) * 100}%` }}
-                          />
-                       </div>
-                    </div>
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="space-y-1">
-                         <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600">Active Syncing</p>
-                         <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-widest truncate">
-                            Updated: {project.updatedAt?.toDate ? project.updatedAt.toDate().toLocaleDateString() : 'Just now'}
-                         </p>
+
+                    {(() => {
+                      const stratStep = Math.max(1, Math.min(project.currentStep || 1, 9));
+                      const isBrandDone = !!project.brandFoundationData || project.currentStep >= 10;
+                      const isAdsDone = !!(project.adsRecommendationsState || project.adsGeneratedAngles) || project.currentStep >= 11;
+
+                      const stratMilestones = Math.min(stratStep, 8);
+                      const brandMilestone = isBrandDone ? 1 : 0;
+                      const adsMilestone = isAdsDone ? 1 : 0;
+                      
+                      const totalCompleted = stratMilestones + brandMilestone + adsMilestone;
+                      const completionPercentage = Math.round((totalCompleted / 10) * 100);
+
+                      return (
+                        <>
+                          {/* Multi-step Status Mini Grid */}
+                          <div className="grid grid-cols-3 gap-2 py-3 px-4 bg-secondary/30 rounded-2xl border border-border/50 text-[9px] font-semibold text-muted-foreground">
+                            <div className="space-y-1">
+                              <span className="text-[8px] font-black uppercase tracking-wider block text-muted-foreground/60">1. Strategy</span>
+                              <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded-md font-black uppercase tracking-wider", stratMilestones >= 8 ? "bg-blue-500/12 text-blue-600 border border-blue-500/15" : "bg-neutral-500/10 text-neutral-600")}>
+                                {stratMilestones}/8 {stratMilestones >= 8 && "✨"}
+                              </span>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[8px] font-black uppercase tracking-wider block text-muted-foreground/60">2. Brand</span>
+                              <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded-md font-black uppercase tracking-wider", isBrandDone ? "bg-pink-500/12 text-pink-600 border border-pink-500/15" : "bg-neutral-500/10 text-neutral-600")}>
+                                {isBrandDone ? "Selesai 🦄" : "Mulai"}
+                              </span>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[8px] font-black uppercase tracking-wider block text-muted-foreground/60">3. Ads Konten</span>
+                              <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded-md font-black uppercase tracking-wider", isAdsDone ? "bg-emerald-500/12 text-emerald-600 border border-emerald-500/15" : "bg-neutral-500/10 text-neutral-600")}>
+                                {isAdsDone ? "Selesai 🚀" : "Mulai"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                             <div className="flex justify-between items-end">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Total Completion</span>
+                                <span className="text-sm font-heading font-black text-primary">{completionPercentage}%</span>
+                             </div>
+                             <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-primary transition-all duration-1000" 
+                                  style={{ width: `${completionPercentage}%` }}
+                                />
+                             </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2">
+                            <div className="space-y-1">
+                               <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600">Active Syncing</p>
+                               <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-widest truncate">
+                                  Updated: {project.updatedAt?.toDate ? project.updatedAt.toDate().toLocaleDateString() : 'Just now'}
+                               </p>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-all group-hover:translate-x-1" />
+                          </div>
+        
+                          <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/wizard/${project.id}?mode=strategy`);
+                              }}
+                              className="h-10 text-[8px] font-black uppercase tracking-widest border-border/50 hover:bg-primary/10 hover:text-primary transition-all animate-pulse"
+                            >
+                              Strategy
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              disabled={stratMilestones < 8}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/wizard/${project.id}?mode=brand`);
+                              }}
+                              className={cn(
+                                "h-10 text-[8px] font-black uppercase tracking-widest border-border/50 transition-all",
+                                isBrandDone ? "hover:bg-pink-500/10 hover:text-pink-600" : ""
+                              )}
+                            >
+                              Brand
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              disabled={!isBrandDone}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/wizard/${project.id}?mode=ads`);
+                              }}
+                              className={cn(
+                                "h-10 text-[8px] font-black uppercase tracking-widest border-border/50 transition-all",
+                                isAdsDone ? "hover:bg-emerald-500/10 hover:text-emerald-600" : ""
+                              )}
+                            >
+                              Ads
+                            </Button>
+                          </div>
+                        </>
+                      );
+                    })()}
+
+                    {isDevActive && (
+                      <div className="pt-4 border-t border-dashed border-emerald-500/20 flex flex-col gap-2">
+                        <span className="text-[7.5px] font-black uppercase text-emerald-600 tracking-wider">🛠️ DEV ACTIONS</span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={(e) => handleEditProjectName(project.id, project.name, e)}
+                            className="h-8 text-[8px] font-black uppercase tracking-wider border-emerald-500/20 text-emerald-700 bg-emerald-500/5 hover:bg-emerald-500 hover:text-white"
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={(e) => openRemixWizard(project, e)}
+                            className="h-8 text-[8px] font-black uppercase tracking-wider border-indigo-500/20 text-indigo-700 bg-indigo-500/5 hover:bg-indigo-500 hover:text-white"
+                          >
+                            Remix
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={(e) => handleDeleteProject(project.id, e)}
+                            className="h-8 text-[8px] font-black uppercase tracking-wider border-red-550/25 text-red-600 bg-red-500/5 hover:bg-red-500 hover:text-white"
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-all group-hover:translate-x-1" />
-                    </div>
-  
-                    <div className="grid grid-cols-2 gap-3 pt-4 border-t border-border/50">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/wizard/${project.id}?mode=strategy`);
-                        }}
-                        className="h-10 text-[9px] font-black uppercase tracking-widest border-border/50 hover:bg-primary/10 hover:text-primary transition-all"
-                      >
-                        1. Sales Strategy
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        disabled={project.currentStep < 8}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/wizard/${project.id}?mode=ads`);
-                        }}
-                        className="h-10 text-[9px] font-black uppercase tracking-widest border-border/50 hover:bg-primary/10 hover:text-primary transition-all"
-                      >
-                        2. Ads Content
-                      </Button>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
@@ -406,11 +1105,178 @@ export default function Dashboard() {
           )
         )}
       </div>
+    </div>
 
       <footer className="pt-10 border-t border-border text-center pb-10">
          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground mb-1">{config.footerText}</p>
          <p className="text-[8px] font-bold text-muted-foreground/40">{config.companyName} &copy; {new Date().getFullYear()}</p>
       </footer>
+
+      {/* Immersive Remix Step Wizard Dialog */}
+      {remixingProject && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-300">
+          <div className="bg-card border border-border w-full max-w-xl rounded-[2.5rem] shadow-2xl p-8 space-y-6 relative overflow-hidden text-left">
+            {/* Ambient upper design */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-emerald-500" />
+            
+            {/* Header */}
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[9px] font-black uppercase text-indigo-500 tracking-widest bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+                  SYSTEM REMIX WIZARD
+                </span>
+                <h2 className="text-3xl font-heading font-black tracking-tighter text-foreground mt-2">
+                  Duplikasi & Akuisisi Workflow
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-semibold">
+                  Mengkoneksikan klon proyek ke token & data personal Anda
+                </p>
+              </div>
+              <button 
+                onClick={() => setRemixingProject(null)}
+                className="text-muted-foreground hover:text-foreground p-2 rounded-full hover:bg-secondary transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Stepper Header */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { step: 1, name: "Identitas" },
+                { step: 2, name: "Token & Akses" }
+              ].map((s) => (
+                <div key={s.step} className="space-y-1.5">
+                  <div className="h-1.5 w-full rounded-full overflow-hidden bg-secondary">
+                    <div 
+                      className={cn(
+                        "h-full transition-all duration-300",
+                        wizardStep >= s.step ? "bg-indigo-600" : "bg-transparent"
+                      )} 
+                    />
+                  </div>
+                  <span className={cn(
+                    "text-[8px] font-black uppercase tracking-widest block text-center",
+                    wizardStep >= s.step ? "text-indigo-600" : "text-muted-foreground/50"
+                  )}>
+                    {s.step}. {s.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Step 1 Content */}
+            {wizardStep === 1 && (
+              <div className="space-y-4 py-2 animate-in fade-in duration-300">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-foreground">Nama Proyek Hasil Remix</label>
+                  <input 
+                    type="text" 
+                    value={wizardName}
+                    onChange={(e) => setWizardName(e.target.value)}
+                    className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-all text-foreground"
+                    placeholder="Masukkan nama proyek hasil klon..."
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Step 2 Content */}
+            {wizardStep === 2 && (
+              <div className="space-y-5 py-2 animate-in fade-in duration-300">
+                <div className="p-5 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl space-y-3.5">
+                  <div className="flex gap-4 items-start">
+                    <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center border border-indigo-500/20 shrink-0">
+                      <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 7a2 2 0 012 2m-9 8h1.01m2.59 0h.01m2.59 0h.01m2.59 0h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-black uppercase text-foreground tracking-tight flex items-center gap-1.5">
+                        🔑 Pasang Gemini API Key Anda
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed font-sans">
+                        Untuk kedaulatan performa generasi copywriting, visualisasi kreatif, dan menghindari batas kuota harian akun demo, hubungkan kunci API Gemini Anda sendiri seutuhnya.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="py-1 pb-2 border-t border-border/40 grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+                    <div className="text-left space-y-0.5">
+                      <span className="text-[8.5px] font-black uppercase tracking-wider text-muted-foreground block">Belum punya kunci API?</span>
+                      <p className="text-[10px] text-muted-foreground">Kunci API Gemini 100% gratis dari Google AI Studio.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => window.open("https://aistudio.google.com/app/apikey", "_blank")}
+                      className="w-full h-9 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[9px] uppercase tracking-widest rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                    >
+                      <span>1. Dapatkan API Key</span>
+                      <svg className="w-3 h-3 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-foreground">Tempel Gemini API Key (AI Studio)</label>
+                    {hasExistingKey && (
+                      <span className="text-[8.5px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                        ✓ Terhubung Otomatis
+                      </span>
+                    )}
+                  </div>
+                  <input 
+                    type="password" 
+                    value={wizardApiKey}
+                    onChange={(e) => setWizardApiKey(e.target.value)}
+                    className="w-full bg-secondary border border-border rounded-xl px-4 py-3.5 text-xs font-mono focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-all text-foreground tracking-widest"
+                    placeholder="Masukkan Gemini API Key..."
+                  />
+                  <div className="p-3 bg-secondary/45 border border-border/40 rounded-xl space-y-1">
+                    <span className="text-[8px] font-black uppercase tracking-wider text-amber-600 block">💡 Tips Duplikasi Cepat:</span>
+                    <p className="text-[9.5px] text-muted-foreground leading-relaxed font-sans font-medium">
+                      Buka tab Google AI Studio, klik tombol <strong className="text-foreground">"Create API Key"</strong> di sudut kiri atas, salin kodenya, kemudian langsung tempel di kolom input di atas. Sistem akan mengklon proyek sekaligus merekam kedaulatan token Anda.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Back & Forward Button Grid */}
+            <div className="flex justify-between items-center pt-4 border-t border-border gap-2">
+              {wizardStep > 1 ? (
+                <Button 
+                  variant="outline" 
+                  onClick={() => setWizardStep(prev => prev - 1)}
+                  className="rounded-xl h-11 px-6 text-xs font-black uppercase tracking-widest border-border hover:bg-secondary"
+                >
+                  Kembali
+                </Button>
+              ) : (
+                <div />
+              )}
+
+              {wizardStep < 2 ? (
+                <Button 
+                  onClick={() => setWizardStep(prev => prev + 1)}
+                  className="rounded-xl h-11 px-8 bg-primary text-white hover:bg-primary/95 text-xs font-black uppercase tracking-widest flex items-center gap-2"
+                >
+                  Lanjutkan
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                </Button>
+              ) : (
+                <Button 
+                  onClick={executeRemixWorkflow}
+                  disabled={creating}
+                  className="rounded-xl h-11 px-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest flex items-center gap-2"
+                >
+                  {creating && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Remix Proyek 🚀
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { Users, Heart, Brain, CheckCircle2 } from "lucide-react";
+import { Users, Heart, Brain, CheckCircle2, Sparkles, HelpCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import StepWrapper from "./StepWrapper";
 import SmartInput from "./SmartInput";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 export default function AudienceStep({ project, onSave, onSaveProject }: any) {
   const [loading, setLoading] = React.useState(false);
@@ -31,6 +32,41 @@ export default function AudienceStep({ project, onSave, onSaveProject }: any) {
       setSelectedId(project.audienceData.selectedOption?.id || null);
     }
   }, [project]);
+
+  const handlePercayakanPadaAI = async () => {
+    setLoading(true);
+    try {
+      const prompt = `
+        Berdasarkan Niche pasar terpilih: ${JSON.stringify(project?.nicheData?.selectedOption || {})}, hasilkan data input form yang strategis dan berkonversi tinggi untuk memetakan Karakter Pelanggan (Audience Persona). 
+        Kembalikan data dalam format JSON persis seperti berikut:
+        {
+          "topPain": "[Keluhan terdalam audiens, misal: Bingung memilih style, merasa wajah kusam]",
+          "audienceGoal": "[Goal terbesar yang ingin diraih, misal: Tampil percaya diri di depan umum tanpa makeup tebal]",
+          "fears": "[Ketakutan terbesar, misal: Salah beli kosmetik abal-abal yang merusak kulit]",
+          "desires": "[Keinginan paling didambakan, misal: Kulit sehat bersinar alami dalam 14 hari]",
+          "extraContext": "[Konteks penjelas tambahan yang intuitif untuk mempermudah beriklan]"
+        }
+        Pastikan merespon HANYA dengan JSON valid, tanpa format pembuka/penutup markdown lain kecuali file JSON-nya sendiri.
+      `;
+      const response = await generateAIContent("", prompt);
+      const cleanText = response.text.replace(/```json\n?|```/g, "").trim();
+      const data = JSON.parse(cleanText);
+      
+      setFormData({
+        topPain: data.topPain || "",
+        audienceGoal: data.audienceGoal || "",
+        fears: data.fears || "",
+        desires: data.desires || "",
+        extraContext: data.extraContext || ""
+      });
+      toast.success("AI berhasil menyusun draf input form karakter pelanggan Anda!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal mengisi form secara otomatis. Silakan coba lagi.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGenerate = async (revision?: string) => {
     setLoading(true);
@@ -83,7 +119,30 @@ export default function AudienceStep({ project, onSave, onSaveProject }: any) {
       hasResult={options.length > 0}
       activeStep={2}
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="space-y-6">
+        {/* Simple non-intrusive tooltip info card */}
+        <div className="p-4 bg-primary/5 rounded-2xl border border-primary/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex gap-3 items-start">
+            <HelpCircle className="w-5 h-5 text-primary shrink-0 mt-0.5 md:mt-0" />
+            <div className="space-y-0.5 text-left">
+              <p className="text-xs font-bold text-foreground">Mengapa langkah ini penting?</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Memahami sisi emosional, impian, dan ketakutan pembeli agar copywriting serta desain visual iklan Anda terasa sangat personal bagi mereka.
+              </p>
+            </div>
+          </div>
+          <Button 
+            type="button"
+            disabled={loading}
+            onClick={handlePercayakanPadaAI}
+            className="w-full md:w-auto bg-primary hover:bg-primary/95 text-white font-black uppercase tracking-wider text-[10px] rounded-xl h-10 px-5 gap-2 shrink-0 cursor-pointer shadow-md shadow-primary/10 transition-all hover:scale-102"
+          >
+            <Sparkles className="w-3.5 h-3.5 animate-pulse text-amber-300" />
+            Percayakan Pada AI ✨
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
@@ -203,6 +262,7 @@ export default function AudienceStep({ project, onSave, onSaveProject }: any) {
           </div>
         </div>
       )}
+      </div>
     </StepWrapper>
   );
 }

@@ -4,8 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { MousePointer2, Loader2, Sparkles, TrendingUp, AlertCircle } from "lucide-react";
-import { db, auth } from "@/lib/firebase";
-import { collection, getDocs, query, where, addDoc, serverTimestamp } from "firebase/firestore";
+import { db, auth, collection, getDocs, query, where, addDoc, serverTimestamp } from "@/lib/firebase";
 import { generateAIContent, AGENT_PROMPTS } from "@/services/aiService";
 import { toast } from "sonner";
 

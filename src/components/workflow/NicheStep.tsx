@@ -1,5 +1,5 @@
 import React from "react";
-import { Search, Brain, Loader2, CheckCircle2 } from "lucide-react";
+import { Search, Brain, Loader2, CheckCircle2, Sparkles, HelpCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { cn, handleAIError } from "@/lib/utils";
 import StepWrapper from "./StepWrapper";
 import SmartInput from "./SmartInput";
+import { Button } from "@/components/ui/button";
 
 export default function NicheStep({ project, onSave, onSaveProject }: any) {
   const [loading, setLoading] = React.useState(false);
@@ -33,6 +34,45 @@ export default function NicheStep({ project, onSave, onSaveProject }: any) {
       setSelectedId(project.nicheData.selectedOption?.id || null);
     }
   }, [project]);
+
+  const handlePercayakanPadaAI = async () => {
+    setLoading(true);
+    try {
+      const prompt = `
+        Berdasarkan nama proyek kami: "${project?.name || 'Bisnis Baru'}", hasilkan data input form yang ideal dan realistis untuk memulai riset ceruk pasar (Niche). 
+        Kembalikan data dalam format JSON persis seperti berikut:
+        {
+          "country": "Indonesia",
+          "age": "18-35 tahun",
+          "interest": "[Nama minat ceruk produk fisik/digital yang sangat subur, spesifik, dan mudah diiklankan]",
+          "skill": "[Keahlian praktis penunjang seperti pembuatan video pendek, copywriting, customer service]",
+          "goal": "Rp 15.000.000 / bulan",
+          "traffic": "Ads",
+          "extraContext": "[Konteks penjelas tambahan yang intuitif bagi pemula untuk langsung sukses]"
+        }
+        Pastikan merespon HANYA dengan JSON valid, tanpa format pembuka/penutup markdown lain kecuali file JSON-nya sendiri.
+      `;
+      const response = await generateAIContent("", prompt);
+      const cleanText = response.text.replace(/```json\n?|```/g, "").trim();
+      const data = JSON.parse(cleanText);
+      
+      setFormData({
+        country: data.country || "Indonesia",
+        age: data.age || "18-35",
+        interest: data.interest || "",
+        skill: data.skill || "",
+        goal: data.goal || "",
+        traffic: data.traffic || "Ads",
+        extraContext: data.extraContext || ""
+      });
+      toast.success("AI berhasil menyusun draf input form ceruk pasar Anda!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal mengisi form secara otomatis. Silakan coba lagi.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGenerate = async (revision?: string) => {
     if (!formData.interest) {
@@ -87,28 +127,52 @@ export default function NicheStep({ project, onSave, onSaveProject }: any) {
       activeStep={1}
     >
       <div className="space-y-6">
+        {/* Simple non-intrusive tooltip info card */}
+        <div className="p-4 bg-primary/5 rounded-2xl border border-primary/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex gap-3 items-start">
+            <HelpCircle className="w-5 h-5 text-primary shrink-0 mt-0.5 md:mt-0" />
+            <div className="space-y-0.5 text-left">
+              <p className="text-xs font-bold text-foreground">Mengapa langkah ini penting?</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Mengetahui minat pasar terbesar dan tingkat kompetisi sedini mungkin agar Anda tidak salah memilih produk jualan yang sepi peminat atau terlalu jenuh.
+              </p>
+            </div>
+          </div>
+          <Button 
+            type="button"
+            disabled={loading}
+            onClick={handlePercayakanPadaAI}
+            className="w-full md:w-auto bg-primary hover:bg-primary/95 text-white font-black uppercase tracking-wider text-[10px] rounded-xl h-10 px-5 gap-2 shrink-0 cursor-pointer shadow-md shadow-primary/10 transition-all hover:scale-102"
+          >
+            <Sparkles className="w-3.5 h-3.5 animate-pulse text-amber-300" />
+            Percayakan Pada AI ✨
+          </Button>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Target Country</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Negara Target Iklan</Label>
               <Input 
+                placeholder="Contoh: Indonesia, Malaysia..."
                 value={formData.country} 
                 onChange={(e) => setFormData({...formData, country: e.target.value})}
                 className="bg-secondary/50 border-border rounded-xl h-12"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Age Range</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Rentang Usia Target</Label>
               <Input 
+                placeholder="Contoh: 18 - 45 tahun..."
                 value={formData.age} 
                 onChange={(e) => setFormData({...formData, age: e.target.value})}
                 className="bg-secondary/50 border-border rounded-xl h-12"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Your Skills / Assets</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Keahlian / Kelebihan Produk</Label>
               <Input 
-                placeholder="e.g. Design, Coding, Writing..."
+                placeholder="Contoh: Desain Grafis, Resep Masakan, Konsultasi Bisnis..."
                 value={formData.skill} 
                 onChange={(e) => setFormData({...formData, skill: e.target.value})}
                 className="bg-secondary/50 border-border rounded-xl h-12"
@@ -118,33 +182,33 @@ export default function NicheStep({ project, onSave, onSaveProject }: any) {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Niche Interest</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Topik Ceruk (Minat / Hobi)</Label>
               <Input 
-                placeholder="e.g. Sustainable Living, Fitness..."
+                placeholder="Contoh: Pola Hidup Sehat, Parenting, Investasi Saham..."
                 value={formData.interest} 
                 onChange={(e) => setFormData({...formData, interest: e.target.value})}
                 className="bg-secondary/50 border-border rounded-xl h-12"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Income Goal (Monthly)</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Target Pendapatan per Bulan</Label>
               <Input 
-                placeholder="e.g. 10 Million IDR"
+                placeholder="Contoh: Rp 10 Juta atau Rp 20 Juta..."
                 value={formData.goal} 
                 onChange={(e) => setFormData({...formData, goal: e.target.value})}
                 className="bg-secondary/50 border-border rounded-xl h-12"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Traffic Strategy</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Strategi Mendapatkan Pembeli (Traffic)</Label>
               <select 
                 value={formData.traffic}
                 onChange={(e) => setFormData({...formData, traffic: e.target.value})}
                 className="w-full h-12 px-3 bg-secondary/50 border border-border rounded-xl text-sm outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="Organic">Organic</option>
-                <option value="Ads">Paid Ads</option>
-                <option value="Hybrid">Hybrid</option>
+                <option value="Organic">Gratis / Organik (Kreator Konten)</option>
+                <option value="Ads">Iklan Berbayar (Meta Ads, Google Ads)</option>
+                <option value="Hybrid">Gabungan (Organik + Iklan Berbayar)</option>
               </select>
             </div>
           </div>

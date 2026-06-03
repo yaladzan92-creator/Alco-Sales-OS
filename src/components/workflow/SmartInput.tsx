@@ -19,24 +19,45 @@ export default function SmartInput({ label, value, onChange, context, placeholde
   const [optimized, setOptimized] = React.useState<{ text: string, suggestions: string[] } | null>(null);
 
   const handleOptimize = async () => {
-    if (!value) {
-      toast.error("Please enter some text to optimize");
-      return;
-    }
     setLoading(true);
     try {
       const inputContext = `
         Context: ${JSON.stringify(context || {})}.
-        User Input: ${value}
+        Target Field Label: ${label}
+        Current User Input (can be empty): ${value || ""}
       `;
-      const response = await generateAIContent(inputContext, AGENT_PROMPTS.OPTIMIZE_INPUT + " Respond in Indonesian.");
+      
+      let promptText = "";
+      if (!value) {
+        promptText = `
+          Tulis satu paragraf draf strategi pemasaran, penjelasan target, atau ide promosi yang sangat berkualitas tinggi, spesifik, ramah pembeli, dan profesional untuk kolom dengan label "${label}".
+          Sesuaikan sepenuhnya dengan konteks data proyek yang diberikan di atas agar saling menyatu secara presisi.
+          Tulis langsung isinya secara ramah pembicaraan Bahasa Indonesia dan jangan menggunakan pembuka formal.
+          Berikan juga 3 saran taktis untuk mengembangkannya.
+          Kembalikan harus dalam JSON valid berbentuk persis seperti:
+          { "optimized_text": "[Tulis gagasan isi di sini secara persuasif dan cerdas]", "suggestions": ["[Saran 1]", "[Saran 2]", "[Saran 3]"] }
+          Pastikan merespon HANYA dengan JSON valid, tanpa kata pengantar atau penjelas markdown lain kecuali JSON itu sendiri.
+        `;
+      } else {
+        promptText = `
+          Lakukan optimasi dan selaraskan (optimize & align) teks input pengguna berikut untuk kolom "${label}" agar terdengar lebih profesional, persuasif, memiliki konversi tinggi, dan sesuai struktur digital marketing papan atas.
+          Pengguna menginput: "${value}"
+          Tulis hasil revisinya dalam Bahasa Indonesia yang menggugah emosi pembeli.
+          Berikan pula 3 saran tindak lanjut yang cerdas.
+          Kembalikan harus dalam JSON valid berbentuk persis seperti:
+          { "optimized_text": "[Teks hasil optimasi di sini]", "suggestions": ["[Metrik/Saran 1]", "[Metrik/Saran 2]", "[Metrik/Saran 3]"] }
+          Pastikan merespon HANYA dengan JSON valid, tanpa konten pengantar lain.
+        `;
+      }
+
+      const response = await generateAIContent(inputContext, promptText);
       const cleanText = response.text.replace(/```json\n?|```/g, "").trim();
       const data = JSON.parse(cleanText);
-      setOptimized({ text: data.optimized_text, suggestions: data.suggestions });
-      toast.success("Input optimized by AI!");
+      setOptimized({ text: data.optimized_text || data.text || "", suggestions: data.suggestions || [] });
+      toast.success("AI berhasil merangkum formulasi strategi!");
     } catch (error) {
       console.error(error);
-      toast.error("Optimization failed");
+      toast.error("Gagal memproses draf optimasi dengan AI");
     } finally {
       setLoading(false);
     }
@@ -54,14 +75,14 @@ export default function SmartInput({ label, value, onChange, context, placeholde
       <div className="flex items-center justify-between">
         <label className="text-[10px] font-black uppercase tracking-widest opacity-60">{label}</label>
         <Button 
-          variant="ghost" 
+          variant="outline" 
           size="sm" 
-          disabled={loading || !value}
+          disabled={loading}
           onClick={handleOptimize}
-          className="h-8 text-primary hover:bg-primary/5 gap-2 px-3 rounded-lg border border-primary/10"
+          className="h-8 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary gap-1.5 px-3 rounded-lg border border-primary/25 cursor-pointer hover:scale-102 transition-all"
         >
-          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-          <span className="text-[9px] font-black uppercase tracking-widest">Optimize with AI</span>
+          {loading ? <Loader2 className="w-3 h-3 animate-spin text-primary" /> : <Sparkles className="w-3.5 h-3.5 text-primary" />}
+          <span className="text-[10px] font-black uppercase tracking-widest">Percayakan Pada AI ✨</span>
         </Button>
       </div>
       

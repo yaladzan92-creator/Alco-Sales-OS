@@ -107,17 +107,6 @@
       },
       "required": ["userId"]
     },
-    "AdCopy": {
-      "title": "Ad Copy",
-      "description": "Generated copywriting variations",
-      "type": "object",
-      "properties": {
-        "type": { "type": "string" },
-        "content": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["type", "content"]
-    },
     "AppConfig": {
       "title": "Application Configuration",
       "description": "Global settings for branding and AI behavior",
@@ -154,26 +143,6 @@
     "/settings/config": {
       "schema": "AppConfig",
       "description": "Global app configuration"
-    },
-    "/niches/{nicheId}": {
-      "schema": "Niche",
-      "description": "Niche research data"
-    },
-    "/products/{productId}": {
-      "schema": "Product",
-      "description": "Product details"
-    },
-    "/products/{productId}/angles/{angleId}": {
-      "schema": "AdAngle",
-      "description": "Marketing angles for advertising campaigns"
-    },
-    "/products/{productId}/offers/{offerId}": {
-      "schema": "Offer",
-      "description": "Sales offer lists"
-    },
-    "/products/{productId}/copies/{copyId}": {
-      "schema": "AdCopy",
-      "description": "Copywriting variations"
     }
   }
 }

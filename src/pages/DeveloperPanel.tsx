@@ -1,5 +1,6 @@
 import React from "react";
 import { useBranding, AppConfig } from "@/contexts/BrandingContext";
+import { generateAIContent } from "@/services/aiService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,9 +45,67 @@ export default function DeveloperPanel() {
   const [activeTab, setActiveTab] = React.useState("branding");
   const [localConfig, setLocalConfig] = React.useState(config);
 
+  // Diagnostics Chatbot states & helpers
+  const [chatMessages, setChatMessages] = React.useState<any[]>([]);
+  const [customInput, setCustomInput] = React.useState("");
+  const [isThinking, setIsThinking] = React.useState(false);
+  const chatBottomRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 50);
+  };
+
+  const handleSendPreset = async (promptContent: string) => {
+    if (isThinking) return;
+    const newMsg = { role: "user", content: promptContent, timestamp: new Date() };
+    const updated = [...chatMessages, newMsg];
+    setChatMessages(updated);
+    setIsThinking(true);
+    scrollToBottom();
+
+    try {
+      const systemPrompt = `
+Anda adalah Alco Developer Diagnostics Assistant, asisten AI teknis senior yang sangat cerdas dan tahu segalanya tentang arsitektur internal project Alco. 
+Tujuan Anda: Membantu tim developer Alco melakukan diagnosis kode, pengujian API Gemini, analisis skema Firestore database, debugging error React+Vite, dan pemeliharaan sistem. 
+
+Pedoman Penting:
+1. Jawablah sebagai insinyur perangkat lunak senior yang andal dan penuh ketelitian teknis tinggi.
+2. Anda tahu bahwa project ini menggunakan Firebase Firestore untuk database ('projects', 'userSettings', dll.), Firebase Authentication, Express backend untuk proxy, dan React + Tailwind untuk antrean frontend.
+3. Bantu developer membayangkan integrasi, mendesain snippet kode TypeScript yang andal, mendiagnosis kegagalan, dan memecahkan masalah.
+4. Jaga agar tanggapan Anda selalu ramah, profesional, ringkas, dan sarat akan wawasan teknis.
+`;
+      const res = await generateAIContent(promptContent, systemPrompt);
+      const textResponse = (res && typeof res === "object" && "text" in res) ? (res as any).text : res;
+      setChatMessages(prev => [...prev, { role: "assistant", content: textResponse, timestamp: new Date() }]);
+    } catch (err: any) {
+      toast.error("Alat diagnos terputus / error.");
+      setChatMessages(prev => [...prev, { role: "assistant", content: `Error executing diagnostic instruction: ${err.message || 'Unknown network error'}`, timestamp: new Date() }]);
+    } finally {
+      setIsThinking(false);
+      scrollToBottom();
+    }
+  };
+
+  const handleSendCustom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customInput.trim() || isThinking) return;
+    const content = customInput;
+    setCustomInput("");
+    handleSendPreset(content);
+  };
+
   React.useEffect(() => {
     setLocalConfig(config);
   }, [config]);
+
+  React.useEffect(() => {
+    if (localStorage.getItem("alco_developer_mode_active") === "true") {
+      setIsAuthenticated(true);
+      setAccessLevel("full");
+    }
+  }, []);
 
   const toggleFeature = (feature: string) => {
     setLocalConfig({
@@ -73,6 +132,8 @@ export default function DeveloperPanel() {
     if (password === config.developerPassword) {
       setIsAuthenticated(true);
       setAccessLevel("full");
+      localStorage.setItem("alco_developer_mode_active", "true");
+      window.dispatchEvent(new Event("alco_developer_auth_changed"));
       toast.success("Welcome back, Master Developer");
     } else {
       toast.error("Invalid developer encryption key");
@@ -207,6 +268,7 @@ export default function DeveloperPanel() {
               { id: "workflow", label: "Core Workflow", icon: Workflow, show: accessLevel === "full" },
               { id: "security", label: "Security & Role", icon: Key, show: accessLevel === "full" },
               { id: "infra", label: "Infrastructure", icon: Database, show: accessLevel === "full" },
+              { id: "diagnostic", label: "Asisten Diagnostik AI", icon: Sparkles, show: accessLevel === "full" },
             ].filter(item => item.show).map((item) => (
               <button
                 key={item.id}
@@ -558,6 +620,121 @@ export default function DeveloperPanel() {
                                  Full Import
                               </Button>
                            </div>
+                        </CardContent>
+                     </Card>
+                  </motion.div>
+               )}
+
+               {activeTab === "diagnostic" && (
+                  <motion.div 
+                     key="diagnostic"
+                     initial={{ opacity: 0, x: 20 }}
+                     animate={{ opacity: 1, x: 0 }}
+                     exit={{ opacity: 0, x: -20 }}
+                     className="space-y-8"
+                  >
+                     <Card className="rounded-[2.5rem] border border-slate-800 bg-slate-900 shadow-2xl overflow-hidden text-left text-white">
+                        <CardHeader className="p-8 bg-slate-950 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                           <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center text-primary">
+                                 <BrainCircuit className="w-6 h-6" />
+                              </div>
+                              <div>
+                                 <CardTitle className="text-sm font-black uppercase tracking-widest text-primary">
+                                    Mainframe Diagnostic Chatbot
+                                 </CardTitle>
+                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Senior DevOps & System Engineer Assistant</p>
+                              </div>
+                           </div>
+                           <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+                              <span className="text-[8.5px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">LIVE TELEMETRY ACTIVE</span>
+                           </div>
+                        </CardHeader>
+                        
+                        <CardContent className="p-8 space-y-6">
+                           {/* Diagnostic Preset Buttons */}
+                           <div className="space-y-2">
+                              <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider">PRESET OPERATIONS (CLICK TO EXECUTE)</span>
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                 {[
+                                    { text: "Uji Konektivitas API", prompt: "Lakukan pemeriksaan status konektivitas Google Gemini API Hub dan validasi parameter API key. Tampilkan status mock up laporan latency / uptime." },
+                                    { text: "Inspeksi Skema Firestore", prompt: "Tolong tampilkan ringkasan struktur skema koleksi 'projects' dan 'userSettings' di Firebase Firestore. Berikan tipe data dan kegunaan field-field penting." },
+                                    { text: "Log Diagnostik Server", prompt: "Berikan panduan langkah demi langkah cara debugging server.ts di development container, termasuk penanganan port 3000 dan CORS Express." },
+                                    { text: "Audit Keamanan Token", prompt: "Lakukan simulasi enkripsi/desentralisasi token API Key pada localStorage browser. Apakah ada potensi kebocoran key ke Firebase dan bagaimana mengamankannya?" }
+                                 ].map((preset, idx) => (
+                                    <button
+                                       key={idx}
+                                       type="button"
+                                       disabled={isThinking}
+                                       onClick={() => handleSendPreset(preset.prompt)}
+                                       className="p-3 bg-slate-950 border border-white/5 hover:border-primary/30 rounded-xl text-left hover:bg-slate-900 transition-all cursor-pointer group"
+                                    >
+                                       <span className="text-[9px] font-black uppercase tracking-wider text-primary group-hover:text-white block mb-1">{preset.text}</span>
+                                       <p className="text-[9.5px] text-slate-400 font-medium leading-tight group-hover:text-slate-300">Jalankan instruksi diagnosis</p>
+                                    </button>
+                                 ))}
+                              </div>
+                           </div>
+
+                           {/* Messages Area */}
+                           <div className="h-[380px] bg-black/60 border border-white/5 rounded-2xl p-6 overflow-y-auto space-y-4 font-mono text-xs flex flex-col" id="console-chat-box">
+                              {chatMessages.length === 0 ? (
+                                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-4 text-slate-500 select-none">
+                                    <Cpu className="w-10 h-10 text-slate-700 animate-spin" style={{ animationDuration: '3s' }} />
+                                    <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed">
+                                       ALCO DIAGNOSTIC SYSTEM SHELL<br />
+                                       <span className="text-primary font-bold">READY TO RECEIVE DIAGNOSTIC COMMANDS</span>
+                                    </p>
+                                 </div>
+                              ) : (
+                                 chatMessages.map((msg, i) => (
+                                    <div 
+                                       key={i} 
+                                       className={cn(
+                                          "p-4 rounded-xl max-w-[85%] whitespace-pre-wrap leading-relaxed animate-in fade-in transition-all text-left",
+                                          msg.role === "user" 
+                                             ? "bg-primary/20 border border-primary/25 text-primary self-end ml-auto text-right" 
+                                             : "bg-slate-900/80 border border-white/5 text-slate-100 mr-auto text-left"
+                                       )}
+                                    >
+                                       <span className="text-[8px] font-black uppercase tracking-wider block opacity-50 mb-1">
+                                          {msg.role === "user" ? "USER:SYS_ADMIN_CMD" : "SYSTEM:DIAGNOSTIC_BOT"} - {new Date(msg.timestamp).toLocaleTimeString()}
+                                       </span>
+                                       <p className="font-semibold text-left">{msg.content}</p>
+                                    </div>
+                                 ))
+                              )}
+                              {isThinking && (
+                                 <div className="bg-slate-900/80 border border-white/5 text-slate-100 p-4 rounded-xl max-w-[80%] mr-auto flex items-center gap-3 animate-pulse text-left">
+                                    <div className="flex gap-1">
+                                       <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '100ms' }} />
+                                       <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '200ms' }} />
+                                       <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                    </div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-primary animate-pulse">SYS_DIAGNOSTIC: THINKING...</span>
+                                 </div>
+                              )}
+                              <div ref={chatBottomRef} />
+                           </div>
+
+                           {/* Send Area */}
+                           <form onSubmit={handleSendCustom} className="flex gap-3">
+                              <Input 
+                                 value={customInput}
+                                 onChange={e => setCustomInput(e.target.value)}
+                                 disabled={isThinking}
+                                 placeholder="Type terminal command or technical questions here (e.g., debug Firebase schema)..."
+                                 className="flex-1 h-12 bg-black border-white/10 text-white rounded-xl text-xs font-mono focus-visible:ring-primary focus-visible:border-primary focus-visible:ring-offset-0"
+                              />
+                              <Button 
+                                 type="submit" 
+                                 disabled={isThinking || !customInput.trim()}
+                                 className="h-12 px-8 bg-primary text-white font-black uppercase tracking-widest text-[10px] rounded-xl flex items-center gap-2 shadow-lg shadow-primary/25 cursor-pointer hover:bg-primary/90"
+                              >
+                                 EXECUTE
+                              </Button>
+                           </form>
                         </CardContent>
                      </Card>
                   </motion.div>

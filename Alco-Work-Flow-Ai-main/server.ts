@@ -1,35 +1,22 @@
 import express from "express";
 import path from "path";
-import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
 
+import { getFirestore } from "firebase-admin/firestore";
+
 dotenv.config();
-
-// Load dynamic config from firebase-applet-config.json
-let firebaseProjectId = "divine-function-j07pf";
-
-try {
-  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  if (fs.existsSync(configPath)) {
-    const configData = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    if (configData.projectId) {
-      firebaseProjectId = configData.projectId;
-    }
-  }
-} catch (error) {
-  console.warn("Could not read local firebase-applet-config.json, falling back:", error);
-}
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp({
-    projectId: firebaseProjectId
+    projectId: "divine-function-j07pf"
   });
 }
 
+const db = getFirestore("ai-studio-2f7f0cc9-7462-47bf-bddf-7237ccbb2d17");
 const PORT = 3000;
 
 // Memory fallback for user config when Firebase is disconnected/offline
@@ -68,10 +55,18 @@ async function startServer() {
     }
   };
 
-  // User Settings Proxy (Pure Memory Only - Fully decoupling Firestore)
+  // User Settings Proxy
   app.get("/api/user/config", authenticate, async (req: any, res: any) => {
     try {
-      const data = adminConfigStore[req.user.uid] || null;
+      let data = adminConfigStore[req.user.uid] || null;
+      if (!data) {
+        try {
+          const doc = await db.collection("userSettings").doc(req.user.uid).get();
+          data = doc.exists ? doc.data() : null;
+        } catch (fbError) {
+          console.warn("[Firebase Admin Firestore] Could not retrieve config, using empty local database:", fbError);
+        }
+      }
       res.json({ 
         onboardingComplete: true,
         hasApiKey: !!data?.geminiApiKey || !!process.env.GEMINI_API_KEY,
@@ -94,6 +89,13 @@ async function startServer() {
       };
       
       adminConfigStore[req.user.uid] = configData;
+
+      try {
+        await db.collection("userSettings").doc(req.user.uid).set(configData, { merge: true });
+      } catch (fbError) {
+        console.warn("[Firebase Admin Firestore] Could not update config, stored in memory only:", fbError);
+      }
+
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -135,13 +137,23 @@ async function startServer() {
       const { prompt, systemInstruction } = req.body;
       const userId = req.user.uid;
 
-      // Strictly require the user's browser-submitted API Key. Fallbacks are banned by policy.
-      const apiKey = req.headers["x-gemini-api-key"] || req.headers["X-Gemini-API-Key"];
+      // Check user memory config first, then Firestore, then fallback to env variables
+      let userSettings = adminConfigStore[userId] || null;
+      if (!userSettings) {
+        try {
+          const userSettingsDoc = await db.collection("userSettings").doc(userId).get();
+          userSettings = userSettingsDoc.exists ? userSettingsDoc.data() : null;
+        } catch (fbError) {
+          console.warn("[Firebase Admin] Could not fetch private developer API key, utilizing ENV fallback value");
+        }
+      }
       
-      if (!apiKey || typeof apiKey !== "string" || apiKey.trim().length === 0) {
-        return res.status(403).json({
-          error: "API_KEY_REQUIRED",
-          message: "Akses AI Ditolak. Anda wajib menyediakan Gemini API Key Anda sendiri."
+      const apiKey = userSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
+      
+      if (!apiKey) {
+        return res.status(500).json({
+          error: "CONFIGURATION_ERROR",
+          message: "Sistem AI belum dikonfigurasi. File .env pada server memerlukan GEMINI_API_KEY."
         });
       }
 
@@ -156,16 +168,15 @@ async function startServer() {
       
       console.log(`[AI Request] User: ${userId} | Model: gemini-3.5-flash | Prompt: ${prompt.substring(0, 50)}...`);
 
-      const modelsToTry = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+      // Retry mechanism for 503 errors
       let attempts = 0;
-      const maxAttempts = 4;
+      const maxAttempts = 3;
       let lastError = null;
 
       while (attempts < maxAttempts) {
-        const modelToUse = modelsToTry[attempts % modelsToTry.length];
         try {
           const result = await aiClient.models.generateContent({
-            model: modelToUse,
+            model: "gemini-3.5-flash",
             contents: prompt,
             config: {
               systemInstruction: systemInstruction || "You are Alco Creative System's AI Business Assistant by Aladzan Corpora. You specialize in digital marketing, sales funnel optimization, and high-converting copywriting. Always provide practical, efficient, and professional advice. Focus on scalable systems and premium brand execution.",
@@ -183,27 +194,6 @@ async function startServer() {
           lastError = error;
           attempts++;
           
-          // Check for Invalid or Unauthorized API Key (permanent failure - do NOT retry)
-          const isInvalidKey = error?.status === 400 || 
-                               error?.status === 403 || 
-                               error?.error?.code === 400 || 
-                               error?.error?.code === 403 || 
-                               error?.message?.toLowerCase().includes("api key not valid") || 
-                               error?.message?.toLowerCase().includes("invalid api key") || 
-                               error?.message?.toLowerCase().includes("unauthorized") || 
-                               error?.message?.toLowerCase().includes("forbidden") || 
-                               error?.message?.toLowerCase().includes("key_invalid") || 
-                               error?.message?.toLowerCase().includes("api_key_invalid") || 
-                               error?.message?.toLowerCase().includes("not valid");
-
-          if (isInvalidKey) {
-            console.error(`[AI API Key Error] Invalid API Key on model ${modelToUse}:`, error);
-            return res.status(403).json({
-              error: "API_KEY_INVALID",
-              message: "Gemini API Key Anda tidak valid atau tidak memiliki izin akses. Pastikan Anda menyalin kunci resmi kembali dari Google AI Studio dan periksa status kuota/billing kunci Anda."
-            });
-          }
-
           // Check for 429 Resource Exhausted / Rate Limit
           const isRateLimit = error?.status === 429 || 
                              error?.error?.code === 429 || 
@@ -212,16 +202,8 @@ async function startServer() {
                              error?.message?.includes("RESOURCE_EXHAUSTED");
 
           if (isRateLimit) {
-            console.error(`[AI Rate Limit] Mode: ${modelToUse}`, error);
+            console.error("[AI Rate Limit]", error);
             
-            if (attempts < maxAttempts) {
-              const delay = 1000;
-              const nextModel = modelsToTry[attempts % modelsToTry.length];
-              console.warn(`[AI Rate Limit Fallback] Rate limited on ${modelToUse}. Retrying with fallback model ${nextModel} in ${delay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-              continue;
-            }
-
             // Try to find retry delay in Google RPC details
             let retryAfter = "someday";
             if (error?.error?.details) {
@@ -243,23 +225,11 @@ async function startServer() {
           const isRetryable = error?.message?.includes("503") || 
                              error?.status === 503 ||
                              error?.error?.code === 503 ||
-                             error?.message?.includes("high demand") ||
-                             error?.message?.includes("UNAVAILABLE") ||
-                             error?.message?.toLowerCase().includes("overloaded");
+                             error?.message?.includes("high demand");
 
           if (isRetryable && attempts < maxAttempts) {
             const delay = Math.pow(2, attempts) * 1000;
-            const nextModel = modelsToTry[attempts % modelsToTry.length];
-            console.warn(`[AI Retry] Attempt ${attempts} failed for ${modelToUse} with transient error. Retrying with ${nextModel} in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            continue;
-          }
-
-          // General failure fallback retry
-          if (attempts < maxAttempts) {
-            const delay = 1000;
-            const nextModel = modelsToTry[attempts % modelsToTry.length];
-            console.warn(`[AI Retry] General error with ${modelToUse}. Retrying with fallback model ${nextModel} in ${delay}ms...`);
+            console.warn(`[AI Retry] Attempt ${attempts} failed with 503. Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }

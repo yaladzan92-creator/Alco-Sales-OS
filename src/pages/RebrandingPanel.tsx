@@ -33,9 +33,15 @@ export default function RebrandingPanel() {
     setLocalConfig(config);
   }, [config]);
 
+  React.useEffect(() => {
+    if (localStorage.getItem("alco_developer_mode_active") === "true") {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
   const handleAuth = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === config.rebrandingPassword) {
+    if (password === config.rebrandingPassword || password === config.developerPassword) {
       setIsAuthenticated(true);
       toast.success("Branding Editor Unlocked");
     } else {

@@ -117,7 +117,11 @@ export default function OfferStep({ project, onSave, onSaveProject }: any) {
                    <div className="space-y-8">
                       <div className="text-center p-8 bg-pink-500/5 rounded-[2.5rem] border border-pink-500/10">
                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-pink-500 mb-2">Main Offer</p>
-                         <p className="text-3xl font-heading font-black text-foreground leading-tight">{option.main_offer}</p>
+                         <p className="text-3xl font-heading font-black text-foreground leading-tight">
+                            {typeof option.main_offer === "object" && option.main_offer !== null
+                              ? (option.main_offer.main_offer || JSON.stringify(option.main_offer))
+                              : (option.main_offer || "Offer")}
+                          </p>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -127,28 +131,40 @@ export default function OfferStep({ project, onSave, onSaveProject }: any) {
                                Value-Stack Bonuses
                             </p>
                             <div className="space-y-3">
-                               {option.bonuses.map((bonus: string, i: number) => (
+                               {Array.isArray(option.bonuses) ? option.bonuses.map((bonus: string, i: number) => (
                                  <div key={i} className="flex items-center gap-4 p-4 bg-secondary/30 rounded-2xl border border-border">
                                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                                     <p className="text-xs font-bold text-foreground opacity-90">{bonus}</p>
                                  </div>
-                               ))}
+                               )) : (
+                                 <div className="p-4 bg-secondary/30 rounded-2xl border border-border">
+                                    <p className="text-xs font-bold text-foreground opacity-90">
+                                      {typeof option.bonuses === "object" ? JSON.stringify(option.bonuses) : String(option.bonuses)}
+                                    </p>
+                                 </div>
+                               )}
                             </div>
                          </div>
 
                          <div className="space-y-6">
                             <div className="bg-emerald-500/5 p-6 rounded-2xl border border-emerald-500/10 text-center">
                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-2">Pricing Strategy</p>
-                               <p className="text-xl font-heading font-black text-foreground">{option.pricing_strategy}</p>
+                               <p className="text-xl font-heading font-black text-foreground">
+                                  {typeof option.pricing_strategy === "object" ? JSON.stringify(option.pricing_strategy) : option.pricing_strategy}
+                                </p>
                             </div>
                             <div className="bg-blue-500/5 p-6 rounded-2xl border border-blue-500/10 text-center space-y-2">
                                <ShieldCheck className="w-6 h-6 text-blue-500 mx-auto" />
                                <p className="text-[9px] font-black uppercase tracking-widest text-blue-600">Risk Reversal</p>
-                               <p className="text-xs font-bold text-foreground italic leading-relaxed">"{option.guarantee}"</p>
+                               <p className="text-xs font-bold text-foreground italic leading-relaxed">
+                                  "{typeof option.guarantee === "object" ? JSON.stringify(option.guarantee) : (option.guarantee || "No-risk Guarantee")}"
+                               </p>
                             </div>
                             <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 text-center">
                                <p className="text-[9px] font-black uppercase tracking-widest text-primary mb-1">Urgency</p>
-                               <p className="text-xs font-black text-foreground uppercase">{option.urgency}</p>
+                               <p className="text-xs font-black text-foreground uppercase">
+                                  {typeof option.urgency === "object" ? JSON.stringify(option.urgency) : option.urgency}
+                               </p>
                             </div>
                          </div>
                       </div>

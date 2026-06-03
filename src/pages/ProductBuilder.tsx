@@ -5,8 +5,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Package, Loader2, Plus, ArrowRight } from "lucide-react";
-import { db, auth } from "../lib/firebase";
-import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
+import { db, auth, collection, addDoc, getDocs, query, where, serverTimestamp } from "../lib/firebase";
 import { toast } from "sonner";
 
 export default function ProductBuilder() {
