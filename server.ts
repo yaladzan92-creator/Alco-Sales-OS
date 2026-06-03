@@ -5,6 +5,12 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
+import {
+  buildAdsContextFromBrand,
+  buildContentContextFromBrand,
+  buildCopywritingContextFromBrand,
+  buildProductContextFromBrand,
+} from "./src/services/contextBuilderCore";
 
 dotenv.config();
 
@@ -34,6 +40,176 @@ const PORT = 3000;
 
 // Memory fallback for user config when Firebase is disconnected/offline
 const adminConfigStore: Record<string, any> = {};
+const brandStorePath = path.join(process.cwd(), "brand-intelligence-store.json");
+const brandStoreMemory: Record<string, any> = {};
+
+function readJsonFileSafe(filePath: string) {
+  try {
+    if (!fs.existsSync(filePath)) return {};
+    const raw = fs.readFileSync(filePath, "utf-8");
+    return raw ? JSON.parse(raw) : {};
+  } catch (error) {
+    console.warn("[Brand Store] Failed to read store file:", error);
+    return {};
+  }
+}
+
+function writeJsonFileSafe(filePath: string, data: any) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+  } catch (error) {
+    console.warn("[Brand Store] Failed to write store file:", error);
+  }
+}
+
+function loadBrandStore() {
+  const fileData = readJsonFileSafe(brandStorePath);
+  return { ...fileData, ...brandStoreMemory };
+}
+
+function saveBrandStore(store: Record<string, any>) {
+  Object.assign(brandStoreMemory, store);
+  writeJsonFileSafe(brandStorePath, store);
+}
+
+function resolveBrandScope(req: any, brandIdParam?: string) {
+  const userId = req.user?.uid || req.headers["x-user-id"] || "mock-userId";
+  const workspaceId = String(req.headers["x-workspace-id"] || req.query.workspaceId || `workspace_${userId}`);
+  const brandId = String(brandIdParam || req.headers["x-brand-id"] || req.query.brandId || req.params?.brandId || "");
+  return { workspaceId, brandId, userId };
+}
+
+function brandStoreKey(scope: { workspaceId: string; brandId: string; userId: string }) {
+  return `${scope.workspaceId}::${scope.brandId}::${scope.userId}`;
+}
+
+function createDefaultBrandRecord(scope: { workspaceId: string; brandId: string; userId: string }) {
+  const now = new Date().toISOString();
+  return {
+    schemaVersion: "2.0",
+    metadata: {
+      projectId: scope.brandId,
+      brandId: scope.brandId,
+      workspaceId: scope.workspaceId,
+      userId: scope.userId,
+      projectName: "Untitled Brand",
+      createdAt: now,
+      updatedAt: now,
+      lastWorkflow: "",
+      lastSyncedAt: "",
+      syncState: "local",
+    },
+    brandIdentity: {
+      brandName: "",
+      niche: "",
+      industry: "",
+      subNiche: "",
+      mission: "",
+      vision: "",
+      positioning: "",
+      usp: "",
+      brandValues: [],
+      brandPersonality: [],
+    },
+    audience: {
+      primaryAudience: "",
+      secondaryAudience: "",
+      demographics: {},
+      psychographics: {},
+      awarenessLevel: "",
+      objections: [],
+      desires: [],
+      frustrations: [],
+      painPoints: [],
+    },
+    positioning: {
+      statement: "",
+      usp: "",
+      uniqueMechanism: "",
+      valueProposition: "",
+      differentiators: [],
+      proofPoints: [],
+      angles: [],
+    },
+    offers: [],
+    messaging: {
+      toneOfVoice: {},
+      copyGuidelines: [],
+      messagingRules: [],
+      bannedWords: [],
+      preferredWords: [],
+    },
+    contentStrategy: {
+      contentPillars: [],
+      contentThemes: [],
+      contentAngles: [],
+      storytellingFrameworks: [],
+      ctaFrameworks: [],
+    },
+    brandRules: [],
+    brandMemory: [],
+    generatedAssets: {
+      hooks: [],
+      captions: [],
+      headlines: [],
+      scripts: [],
+      adCopies: [],
+      imagePrompts: [],
+      carouselStructures: [],
+      videoStoryboards: [],
+    },
+    insights: {
+      opportunities: [],
+      threats: [],
+      trends: [],
+      validationFindings: [],
+      notes: [],
+    },
+    history: [],
+    products: [],
+    competitors: [],
+    projectInfo: {
+      projectId: scope.brandId,
+      projectName: "Untitled Brand",
+      createdAt: now,
+      updatedAt: now,
+    },
+    marketInsights: {
+      opportunities: [],
+      threats: [],
+      trends: [],
+      validationFindings: [],
+    },
+  };
+}
+
+function getBrandRecord(scope: { workspaceId: string; brandId: string; userId: string }) {
+  const store = loadBrandStore();
+  const key = brandStoreKey(scope);
+  return store[key] || createDefaultBrandRecord(scope);
+}
+
+function upsertBrandRecord(scope: { workspaceId: string; brandId: string; userId: string }, patch: any) {
+  const store = loadBrandStore();
+  const key = brandStoreKey(scope);
+  const current = store[key] || createDefaultBrandRecord(scope);
+  const next = {
+    ...current,
+    ...patch,
+    metadata: {
+      ...(current.metadata || {}),
+      ...(patch.metadata || {}),
+      workspaceId: scope.workspaceId,
+      brandId: scope.brandId,
+      userId: scope.userId,
+      projectId: scope.brandId,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+  store[key] = next;
+  saveBrandStore(store);
+  return next;
+}
 
 async function startServer() {
   const app = express();
@@ -95,6 +271,197 @@ async function startServer() {
       
       adminConfigStore[req.user.uid] = configData;
       res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Brand Intelligence Store + Intelligence API
+  app.get("/api/brand/:brandId", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const record = getBrandRecord(scope);
+      res.json({ success: true, brand: record, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/brand/:brandId", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const next = upsertBrandRecord(scope, req.body || {});
+      res.json({ success: true, brand: next, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/brand/:brandId/identity", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const current = getBrandRecord(scope);
+      const next = upsertBrandRecord(scope, {
+        ...current,
+        brandIdentity: { ...(current.brandIdentity || {}), ...(req.body || {}) },
+      });
+      res.json({ success: true, brand: next, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/brand/:brandId/audience", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const current = getBrandRecord(scope);
+      const next = upsertBrandRecord(scope, {
+        ...current,
+        audience: { ...(current.audience || {}), ...(req.body || {}) },
+      });
+      res.json({ success: true, brand: next, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/brand/:brandId/positioning", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const current = getBrandRecord(scope);
+      const next = upsertBrandRecord(scope, {
+        ...current,
+        positioning: { ...(current.positioning || {}), ...(req.body || {}) },
+        history: Array.isArray(current.history)
+          ? [
+              {
+                id: `positioning_${Date.now()}`,
+                type: "positioning",
+                step: "positioning",
+                title: `Positioning V${(current.history.filter((i: any) => i.type === "positioning").length || 0) + 1}`,
+                summary: "Positioning update via API.",
+                payload: req.body || {},
+                createdAt: new Date().toISOString(),
+              },
+              ...current.history,
+            ]
+          : [],
+      });
+      res.json({ success: true, brand: next, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/brand/:brandId/offers", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const current = getBrandRecord(scope);
+      const offers = Array.isArray(current.offers) ? [...current.offers] : [];
+      const incoming = req.body || {};
+      const normalized = {
+        id: String(incoming.id || `offer_${Date.now()}`),
+        title: String(incoming.title || incoming.mainOffer || incoming.main_offer || "Offer"),
+        mainOffer: String(incoming.mainOffer || incoming.main_offer || incoming.title || "Offer"),
+        bonuses: Array.isArray(incoming.bonuses) ? incoming.bonuses : [],
+        pricingStrategy: String(incoming.pricingStrategy || incoming.pricing_strategy || ""),
+        guarantee: String(incoming.guarantee || ""),
+        urgency: String(incoming.urgency || incoming.scarcity || ""),
+        raw: incoming,
+        createdAt: incoming.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const existingIndex = offers.findIndex((item: any) => item.id === normalized.id || item.mainOffer === normalized.mainOffer);
+      if (existingIndex >= 0) offers[existingIndex] = normalized;
+      else offers.push(normalized);
+      const next = upsertBrandRecord(scope, { ...current, offers });
+      res.json({ success: true, brand: next, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/brand/:brandId/memory", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const current = getBrandRecord(scope);
+      const memory = Array.isArray(current.brandMemory) ? [...current.brandMemory] : [];
+      const incoming = req.body || {};
+      const nextEntry = {
+        id: `memory_${Date.now()}`,
+        source: String(incoming.source || "api"),
+        note: String(incoming.note || ""),
+        tags: Array.isArray(incoming.tags) ? incoming.tags : [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const next = upsertBrandRecord(scope, { ...current, brandMemory: [nextEntry, ...memory].slice(0, 200) });
+      res.json({ success: true, brand: next, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/brand/:brandId/export", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const record = getBrandRecord(scope);
+      res.json({ success: true, brand: record, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/brand/import", authenticate, async (req: any, res: any) => {
+    try {
+      const incoming = req.body?.brand || req.body || {};
+      const scope = resolveBrandScope(req, incoming.metadata?.brandId || incoming.metadata?.projectId || req.body?.brandId);
+      const next = upsertBrandRecord(scope, incoming);
+      res.json({ success: true, brand: next, scope });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/context/content/:brandId", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const brand = getBrandRecord(scope);
+      const context = buildContentContextFromBrand(brand, { project: brand, product: req.body?.product });
+      res.json({ success: true, ...context, serialized: JSON.stringify(context, null, 2) });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/context/ads/:brandId", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const brand = getBrandRecord(scope);
+      const context = buildAdsContextFromBrand(brand, { project: brand, product: req.body?.product });
+      res.json({ success: true, ...context, serialized: JSON.stringify(context, null, 2) });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/context/product/:brandId", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const brand = getBrandRecord(scope);
+      const context = buildProductContextFromBrand(brand, { project: brand, product: req.body?.product });
+      res.json({ success: true, ...context, serialized: JSON.stringify(context, null, 2) });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/context/copy/:brandId", authenticate, async (req: any, res: any) => {
+    try {
+      const scope = resolveBrandScope(req, req.params.brandId);
+      const brand = getBrandRecord(scope);
+      const context = buildCopywritingContextFromBrand(brand, { project: brand, product: req.body?.product, copyType: String(req.query.copyType || "landing_page") });
+      res.json({ success: true, ...context, serialized: JSON.stringify(context, null, 2) });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
