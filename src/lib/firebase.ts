@@ -16,20 +16,33 @@ const MOCK_TOKEN = "local-mock-token";
 
 class MockAuth {
   private listeners: Set<(user: User | null) => void> = new Set();
+  private cachedUser: User | null = null;
+  private lastProfileStr: string | null = null;
 
   get currentUser(): User | null {
     const profileStr = localStorage.getItem("alco_user_profile");
-    if (!profileStr) return null;
+    if (!profileStr) {
+      this.cachedUser = null;
+      this.lastProfileStr = null;
+      return null;
+    }
+    if (profileStr === this.lastProfileStr && this.cachedUser) {
+      return this.cachedUser;
+    }
     try {
       const profile = JSON.parse(profileStr);
-      return {
+      this.lastProfileStr = profileStr;
+      this.cachedUser = {
         uid: "local-user-id",
         displayName: profile.name || "User",
         email: profile.brandName || "Brand",
         photoURL: null,
         getIdToken: async () => MOCK_TOKEN
       };
+      return this.cachedUser;
     } catch {
+      this.cachedUser = null;
+      this.lastProfileStr = null;
       return null;
     }
   }

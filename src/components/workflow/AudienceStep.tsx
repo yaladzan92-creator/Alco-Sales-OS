@@ -36,15 +36,29 @@ export default function AudienceStep({ project, onSave, onSaveProject }: any) {
   const handlePercayakanPadaAI = async () => {
     setLoading(true);
     try {
+      const activeInputs = {
+        topPain: formData.topPain,
+        audienceGoal: formData.audienceGoal,
+        fears: formData.fears,
+        desires: formData.desires,
+        extraContext: formData.extraContext
+      };
+
       const prompt = `
-        Berdasarkan Niche pasar terpilih: ${JSON.stringify(project?.nicheData?.selectedOption || {})}, hasilkan data input form yang strategis dan berkonversi tinggi untuk memetakan Karakter Pelanggan (Audience Persona). 
-        Kembalikan data dalam format JSON persis seperti berikut:
+        Berdasarkan Niche pasar terpilih: ${JSON.stringify(project?.nicheData?.selectedOption || {})}, hasilkan data input form yang strategis dan berkonversi tinggi untuk memetakan Karakter Pelanggan (Audience Persona) PRODUK DIGITAL.
+
+        PENTING: Pengguna telah mengisi sebagian atau seluruh nilai formulir saat ini sebagai berikut:
+        ${JSON.stringify(activeInputs)}
+
+        Silakan periksa nilai-nilai di atas. Jika ada nilai yang diisi (tidak kosong, atau berbeda dari default kosong), Anda HARUS memprioritaskan dan melestarikannya (keep atau sempurnakan dan jangan menghilangkannya). Lengkapi kolom yang kosong dengan rekomendasi cerdas yang sangat selaras, harmonis, dan mendukung isian pengguna yang sudah ada tersebut agar pemetaan audiens sukses.
+
+        Format JSON respon harus persis seperti berikut:
         {
-          "topPain": "[Keluhan terdalam audiens, misal: Bingung memilih style, merasa wajah kusam]",
-          "audienceGoal": "[Goal terbesar yang ingin diraih, misal: Tampil percaya diri di depan umum tanpa makeup tebal]",
-          "fears": "[Ketakutan terbesar, misal: Salah beli kosmetik abal-abal yang merusak kulit]",
-          "desires": "[Keinginan paling didambakan, misal: Kulit sehat bersinar alami dalam 14 hari]",
-          "extraContext": "[Konteks penjelas tambahan yang intuitif untuk mempermudah beriklan]"
+          "topPain": "[Keluhan terdalam audiens, gunakan/sempurnakan isian pengguna jika ada]",
+          "audienceGoal": "[Goal terbesar yang ingin diraih, gunakan/sempurnakan isian pengguna jika ada]",
+          "fears": "[Ketakutan terbesar, gunakan/sempurnakan isian pengguna jika ada]",
+          "desires": "[Keinginan paling didambakan, gunakan/sempurnakan isian pengguna jika ada]",
+          "extraContext": "[Konteks penjelas tambahan yang intuitif untuk mempermudah beriklan, gunakan/sempurnakan isian pengguna jika ada]"
         }
         Pastikan merespon HANYA dengan JSON valid, tanpa format pembuka/penutup markdown lain kecuali file JSON-nya sendiri.
       `;
@@ -52,17 +66,17 @@ export default function AudienceStep({ project, onSave, onSaveProject }: any) {
       const cleanText = response.text.replace(/```json\n?|```/g, "").trim();
       const data = JSON.parse(cleanText);
       
-      setFormData({
-        topPain: data.topPain || "",
-        audienceGoal: data.audienceGoal || "",
-        fears: data.fears || "",
-        desires: data.desires || "",
-        extraContext: data.extraContext || ""
-      });
-      toast.success("AI berhasil menyusun draf input form karakter pelanggan Anda!");
+      setFormData(prev => ({
+        topPain: data.topPain || prev.topPain || "",
+        audienceGoal: data.audienceGoal || prev.audienceGoal || "",
+        fears: data.fears || prev.fears || "",
+        desires: data.desires || prev.desires || "",
+        extraContext: data.extraContext || prev.extraContext || ""
+      }));
+      toast.success("AI berhasil menganalisis dan menyempurnakan karakter pelanggan Anda!");
     } catch (err) {
       console.error(err);
-      toast.error("Gagal mengisi form secara otomatis. Silakan coba lagi.");
+      toast.error("Gagal melengkapi form secara otomatis. Silakan coba lagi.");
     } finally {
       setLoading(false);
     }

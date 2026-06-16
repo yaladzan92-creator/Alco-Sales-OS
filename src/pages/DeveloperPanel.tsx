@@ -30,7 +30,11 @@ import {
   Sparkles,
   Zap,
   Eye,
-  SmilePlus
+  SmilePlus,
+  FileCode,
+  Copy,
+  Check,
+  Code
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
@@ -44,6 +48,81 @@ export default function DeveloperPanel() {
   const [loading, setLoading] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState("branding");
   const [localConfig, setLocalConfig] = React.useState(config);
+
+  // API Generator & Hub states
+  const [apiPreset, setApiPreset] = React.useState<"niche" | "audience" | "pain" | "positioning" | "offer" | "custom">("niche");
+  const [apiSystemInstruction, setApiSystemInstruction] = React.useState(
+    "Bertindaklah sebagai pakar riset pasar yang ramah bagi pemula. Analisis tren ceruk (niche) potensial. Sediakan 3 rekomendasi ceruk pasar yang mendasar, sangat sederhana, to-the-point, tanpa istilah teknis berbelit-belit, dan fokus pada kecocokan untuk dibuatkan iklan. Gunakan Bahasa Indonesia yang mudah dipahami pemula. Kembalikan JSON: { options: [{ id, name, demand_score, competition_score, viral_potential, summary }] }"
+  );
+  const [apiMimeType, setApiMimeType] = React.useState<"application/json" | "text/plain">("application/json");
+  const [apiTestPrompt, setApiTestPrompt] = React.useState("parfum mewah untuk pria kantoran");
+  const [apiTesting, setApiTesting] = React.useState(false);
+  const [apiResult, setApiResult] = React.useState<any>(null);
+  const [apiSnippetTab, setApiSnippetTab] = React.useState<"curl" | "fetch" | "python" | "php">("curl");
+  const [apiCopiedSnippet, setApiCopiedSnippet] = React.useState(false);
+  const [apiCopiedResponse, setApiCopiedResponse] = React.useState(false);
+
+  const handleApiPresetChange = (preset: "niche" | "audience" | "pain" | "positioning" | "offer" | "custom") => {
+    setApiPreset(preset);
+    let system = "";
+    let promptText = "";
+    
+    if (preset === "niche") {
+      system = "Bertindaklah sebagai pakar riset pasar yang ramah bagi pemula. Analisis tren ceruk (niche) potensial. Sediakan 3 rekomendasi ceruk pasar yang mendasar, sangat sederhana, to-the-point, tanpa istilah teknis berbelit-belit, dan fokus pada kecocokan untuk dibuatkan iklan. Gunakan Bahasa Indonesia yang mudah dipahami pemula. Kembalikan JSON: { options: [{ id, name, demand_score, competition_score, viral_potential, summary }] }";
+      promptText = "parfum mewah untuk pria kantoran";
+    } else if (preset === "audience") {
+      system = "Berdasarkan ceruk (niche), berikan 3 profil pembeli (persona audiens) paling potensial yang siap membeli produk lewat iklan. Tulis dengan gaya bahasa sederhana, dan to-the-point agar pemasar awal mudah memahaminya. Hindari istilah teoritis panjang. Tulis seluruh analisis dalam Bahasa Indonesia. Kembalikan JSON: { options: [{ id, persona_name, emotional_triggers[], buying_behavior, trust_triggers[], analysis }] }";
+      promptText = "Yoga untuk pengembang remote yang sibuk";
+    } else if (preset === "pain") {
+      system = "Analisis masalah/titik lelah dari persona terpilih. Temukan 3 sudut pandang keluhan utama yang paling bernilai tinggi (profitable pain points) untuk diangkat ke materi iklan. Sediakan deskripsi singkat, padat, langsung pada benang merah masalah agar pemula mengerti emosi pembeli. Bahasa Indonesia. Kembalikan JSON: { options: [{ id, profitable_problem, top_pain_points[], urgency_score, emotional_score }] }";
+      promptText = "pengembang remote yang mengalami sakit punggung bungkuk";
+    } else if (preset === "positioning") {
+      system = "Tentukan positioning produk. Buat 3 strategi penempatan pembeda produk (positioning) yang mudah dipahami pemula (contoh: Paling Cepat, Paling Murah/Terjangkau, atau Dituntun Ahli). Buat dalam Bahasa Indonesia sederhana, langsung ke keunggulan unik produk untuk dimasukkan ke teks headline iklan. Kembalikan JSON: { options: [{ id, title, positioning_statement, USP, unique_mechanism, value_proposition }] }";
+      promptText = "Aplikasi senam yoga mini 10 menit";
+    } else if (preset === "offer") {
+      system = "Rancang 3 variasi paket penawaran (offer stack) yang sulit ditolak pembeli. Buat dengan skema super simpel dalam Bahasa Indonesia: cantumkan isi penawaran utama, daftar bonus sederhana, garansi tanpa ribet, dan dorongan urgensi yang wajar (tidak bertele-tele). Kembalikan JSON: { options: [{ id, type, main_offer, bonuses[], pricing_strategy, guarantee, urgency }] }";
+      promptText = "Paket Kursus Yoga dan bonus bantal latihan gratis";
+    } else {
+      system = "Anda adalah AI personal asisten kreatif. Bantu pengguna menghasilkan konten bisnis yang menarik dan produktif dalam Bahasa Indonesia. Kembalikan JSON mentah.";
+      promptText = "Buat tajuk utama berita sensasional tentang peluncuran AI";
+    }
+    
+    setApiSystemInstruction(system);
+    setApiTestPrompt(promptText);
+  };
+
+  const handleTestApi = async () => {
+    setApiTesting(true);
+    setApiResult(null);
+    try {
+      const personalKey = localStorage.getItem("alco_gemini_api_key") || "";
+      const response = await fetch("/api/v1/execute", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Gemini-API-Key": personalKey,
+        },
+        body: JSON.stringify({
+          prompt: apiTestPrompt,
+          systemInstruction: apiSystemInstruction,
+          responseMimeType: apiMimeType
+        })
+      });
+      
+      const payload = await response.json();
+      setApiResult(payload);
+      if (response.ok && payload.success) {
+        toast.success("Sandbox API berhasil dieksekusi!");
+      } else {
+        toast.error("API Error: " + (payload.message || payload.error || "Gagal"));
+      }
+    } catch (err: any) {
+      toast.error("Network Error: " + (err.message || err));
+      setApiResult({ success: false, error: err.message || err });
+    } finally {
+      setApiTesting(false);
+    }
+  };
 
   // Diagnostics Chatbot states & helpers
   const [chatMessages, setChatMessages] = React.useState<any[]>([]);
@@ -265,6 +344,7 @@ Pedoman Penting:
             {[
               { id: "branding", label: "White Label", icon: Palette, show: true },
               { id: "ai", label: "AI & Intelligence", icon: BrainCircuit, show: accessLevel === "full" },
+              { id: "apiHub", label: "API Generator Hub", icon: FileCode, show: accessLevel === "full" },
               { id: "workflow", label: "Core Workflow", icon: Workflow, show: accessLevel === "full" },
               { id: "security", label: "Security & Role", icon: Key, show: accessLevel === "full" },
               { id: "infra", label: "Infrastructure", icon: Database, show: accessLevel === "full" },
@@ -620,6 +700,343 @@ Pedoman Penting:
                                  Full Import
                               </Button>
                            </div>
+                        </CardContent>
+                     </Card>
+                  </motion.div>
+               )}
+
+               {activeTab === "apiHub" && (
+                  <motion.div 
+                     key="apiHub"
+                     initial={{ opacity: 0, x: 20 }}
+                     animate={{ opacity: 1, x: 0 }}
+                     exit={{ opacity: 0, x: -20 }}
+                     className="space-y-8 text-left"
+                  >
+                     <Card className="rounded-[2.5rem] border-border shadow-xl overflow-hidden">
+                        <CardHeader className="p-10 bg-slate-50 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+                           <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg">
+                                 <FileCode className="w-6 h-6 animate-pulse" />
+                              </div>
+                              <div>
+                                 <CardTitle className="text-lg font-black uppercase tracking-widest text-primary">
+                                    Pusat Pembuat & Integrasi API (API Generator Hub)
+                                 </CardTitle>
+                                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-1">Hasilkan Endpoint REST API yang Bisa Diakses Aplikasi Lain Secara Langsung</p>
+                              </div>
+                           </div>
+                           <div className="flex items-center gap-2 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-full">
+                              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+                              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600">GATEWAY API AKTIF</span>
+                           </div>
+                        </CardHeader>
+                        <CardContent className="p-10 space-y-10">
+                           
+                           {/* Step 1: Preset Selection */}
+                           <div className="space-y-4">
+                              <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block">
+                                 1. Pilih Preset Kemampuan Sistem (Alco System Presets)
+                              </label>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                 {[
+                                    { id: "niche", label: "Penemuan Niche" },
+                                    { id: "audience", label: "Analisis Audiens" },
+                                    { id: "pain", label: "Analisis Pain Points" },
+                                    { id: "positioning", label: "Product Positioning" },
+                                    { id: "offer", label: "Penawaran Unik (Offer Stack)" },
+                                    { id: "custom", label: "Kustom Model (Bebas)" }
+                                 ].map((preset) => (
+                                    <button
+                                       key={preset.id}
+                                       type="button"
+                                       onClick={() => handleApiPresetChange(preset.id as any)}
+                                       className={cn(
+                                          "p-4 rounded-2xl border text-left font-bold text-xs capitalize transition-all cursor-pointer flex items-center gap-3",
+                                          apiPreset === preset.id
+                                             ? "bg-slate-900 text-white border-slate-900 shadow-xl"
+                                             : "bg-white text-slate-700 border-border hover:bg-slate-50"
+                                       )}
+                                    >
+                                       <span className={cn(
+                                          "w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0",
+                                          apiPreset === preset.id ? "border-primary bg-primary" : "border-slate-300"
+                                       )}>
+                                          {apiPreset === preset.id && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                       </span>
+                                       {preset.label}
+                                    </button>
+                                 ))}
+                              </div>
+                           </div>
+
+                           {/* Step 2: System Instruction Override */}
+                           <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                 <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                                    2. Instruksi Sistem API (System Instruction)
+                                 </label>
+                                 <span className="text-[8px] font-black uppercase tracking-widest text-[#6366f1] bg-[#6366f1]/10 px-2 py-0.5 rounded border border-[#6366f1]/15 font-sans">DISELESAIKAN PROMPTING</span>
+                              </div>
+                              <Textarea
+                                 value={apiSystemInstruction}
+                                 onChange={(e) => setApiSystemInstruction(e.target.value)}
+                                 placeholder="Berikan instruksi agar AI berperan sesuai kemauan sistem Anda..."
+                                 className="min-h-[140px] bg-slate-50 border-border rounded-2xl p-5 text-xs font-mono leading-relaxed"
+                              />
+                           </div>
+
+                           {/* Step 3: Response Format & Output Type */}
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                              <div className="space-y-3">
+                                 <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block">
+                                    3. Format Hasil Respon API (Output Format)
+                                 </label>
+                                 <div className="grid grid-cols-2 gap-3">
+                                    {[
+                                       { id: "application/json", label: "JSON Terstruktur" },
+                                       { id: "text/plain", label: "Teks Bebas / Markdown" }
+                                    ].map((fmt) => (
+                                       <button
+                                          key={fmt.id}
+                                          type="button"
+                                          onClick={() => setApiMimeType(fmt.id as any)}
+                                          className={cn(
+                                             "h-12 rounded-xl border font-black uppercase tracking-widest text-[9px] cursor-pointer transition-all",
+                                             apiMimeType === fmt.id
+                                                ? "bg-primary border-primary text-white shadow-md"
+                                                : "bg-[#f8fafc] border-border text-slate-600 hover:bg-slate-100"
+                                          )}
+                                       >
+                                          {fmt.label}
+                                       </button>
+                                    ))}
+                                 </div>
+                              </div>
+                              <div className="space-y-3">
+                                 <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block">
+                                    4. Dynamic Endpoint URL (Saluran Integrasi)
+                                 </label>
+                                 <div className="p-3 bg-[#e0f2fe] border border-[#bae6fd] rounded-xl font-mono text-[10.5px] text-[#0369a1] select-all flex justify-between items-center">
+                                    <span className="truncate mr-2 font-bold">{window.location.origin}/api/v1/execute</span>
+                                    <button
+                                       type="button"
+                                       onClick={() => {
+                                          navigator.clipboard.writeText(window.location.origin + "/api/v1/execute");
+                                          toast.success("Endpoint URL tersalin ke clipboard!");
+                                       }}
+                                       className="p-1 hover:bg-[#bae6fd] rounded text-[#0284c7] transition-all shrink-0 cursor-pointer"
+                                       title="Salin Endpoint URL"
+                                    >
+                                       <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                 </div>
+                              </div>
+                           </div>
+
+                        </CardContent>
+                     </Card>
+
+                     {/* Tab integrations code blocks */}
+                     <Card className="rounded-[2.5rem] border-border shadow-xl overflow-hidden">
+                        <CardHeader className="p-8 bg-slate-50 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                           <div className="flex items-center gap-3">
+                              <Code className="w-5 h-5 text-primary" />
+                              <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-700">Kode Integrasi Instan (Salin Langsung)</CardTitle>
+                           </div>
+                           <div className="flex gap-1.5 p-1 bg-slate-200/60 rounded-xl">
+                              {[
+                                 { id: "curl", label: "cURL" },
+                                 { id: "fetch", label: "Fetch JS" },
+                                 { id: "python", label: "Python" },
+                                 { id: "php", label: "PHP" }
+                              ].map((tab) => (
+                                 <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setApiSnippetTab(tab.id as any)}
+                                    className={cn(
+                                       "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider cursor-pointer transition-all",
+                                       apiSnippetTab === tab.id
+                                          ? "bg-slate-900 text-white shadow-sm"
+                                          : "text-slate-600 hover:text-slate-900"
+                                    )}
+                                 >
+                                    {tab.label}
+                                 </button>
+                              ))}
+                           </div>
+                        </CardHeader>
+                        <CardContent className="p-0 bg-slate-950 text-white relative">
+                           {/* Code Container */}
+                           <div className="p-8 font-mono text-[11px] leading-relaxed overflow-x-auto text-left max-h-[350px]">
+                              {apiSnippetTab === "curl" && (
+                                 <pre className="text-emerald-400 whitespace-pre">
+{`curl -X POST "${window.location.origin}/api/v1/execute" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Gemini-API-Key: BANYAK_SALIN_KUNCI_DISINI" \\
+  -d '{
+    "prompt": "${apiTestPrompt}",
+    "systemInstruction": "${apiSystemInstruction.replace(/"/g, '\\"')}",
+    "responseMimeType": "${apiMimeType}"
+  }'`}
+                                 </pre>
+                              )}
+                              {apiSnippetTab === "fetch" && (
+                                 <pre className="text-blue-400 whitespace-pre">
+{`fetch("${window.location.origin}/api/v1/execute", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-Gemini-API-Key": "KUNCI_GEMINI_ANDA"
+  },
+  body: JSON.stringify({
+    prompt: "${apiTestPrompt}",
+    systemInstruction: "${apiSystemInstruction.replace(/"/g, '\\"')}",
+    responseMimeType: "${apiMimeType}"
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data))
+.catch(err => console.error(err));`}
+                                 </pre>
+                              )}
+                              {apiSnippetTab === "python" && (
+                                 <pre className="text-amber-400 whitespace-pre">
+{`import requests
+
+url = "${window.location.origin}/api/v1/execute"
+headers = {
+    "Content-Type": "application/json",
+    "X-Gemini-API-Key": "KUNCI_GEMINI_ANDA"
+}
+payload = {
+    "prompt": "${apiTestPrompt}",
+    "systemInstruction": "${apiSystemInstruction.replace(/"/g, '\\"')}",
+    "responseMimeType": "${apiMimeType}"
+}
+
+response = requests.post(url, json=payload, headers=headers)
+print(response.json())`}
+                                 </pre>
+                              )}
+                              {apiSnippetTab === "php" && (
+                                 <pre className="text-indigo-300 whitespace-pre">
+{`<?php
+$url = "${window.location.origin}/api/v1/execute";
+$headers = [
+    "Content-Type: application/json",
+    "X-Gemini-API-Key: KUNCI_GEMINI_ANDA"
+];
+$payload = [
+    "prompt" => "${apiTestPrompt}",
+    "systemInstruction" => "${apiSystemInstruction.replace(/"/g, '\\"')}",
+    "responseMimeType" => "${apiMimeType}"
+];
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+echo $response;
+?>`}
+                                 </pre>
+                              )}
+                           </div>
+                           
+                           {/* Direct Copy Action Overlays */}
+                           <div className="absolute top-4 right-4 z-10 flex gap-2">
+                              <Button
+                                 onClick={() => {
+                                    let copyText = "";
+                                    if (apiSnippetTab === "curl") {
+                                       copyText = `curl -X POST "${window.location.origin}/api/v1/execute" \\\n  -H "Content-Type: application/json" \\\n  -H "X-Gemini-API-Key: BANYAK_SALIN_KUNCI_DISINI" \\\n  -d '{\n    "prompt": "${apiTestPrompt}",\n    "systemInstruction": "${apiSystemInstruction.replace(/"/g, '\\"')}",\n    "responseMimeType": "${apiMimeType}"\n  }'`;
+                                    } else if (apiSnippetTab === "fetch") {
+                                       copyText = `fetch("${window.location.origin}/api/v1/execute", {\n  method: "POST",\n  headers: {\n    "Content-Type": "application/json",\n    "X-Gemini-API-Key": "KUNCI_GEMINI_ANDA"\n  },\n  body: JSON.stringify({\n    prompt: "${apiTestPrompt}",\n    systemInstruction: "${apiSystemInstruction.replace(/"/g, '\\"')}",\n    responseMimeType: "${apiMimeType}"\n  })\n})\n.then(res => res.json())\n.then(data => console.log(data))\n.catch(err => console.error(err));`;
+                                    } else if (apiSnippetTab === "python") {
+                                       copyText = `import requests\n\nurl = "${window.location.origin}/api/v1/execute"\nheaders = {\n    "Content-Type": "application/json",\n    "X-Gemini-API-Key": "KUNCI_GEMINI_ANDA"\n}\npayload = {\n    "prompt": "${apiTestPrompt}",\n    "systemInstruction": "${apiSystemInstruction.replace(/"/g, '\\"')}",\n    "responseMimeType": "${apiMimeType}"\n}\n\nresponse = requests.post(url, json=payload, headers=headers)\nprint(response.json())`;
+                                    } else if (apiSnippetTab === "php") {
+                                       copyText = `<?php\n$url = "${window.location.origin}/api/v1/execute";\n$headers = [\n    "Content-Type: application/json",\n    "X-Gemini-API-Key: KUNCI_GEMINI_ANDA"\n];\n$payload = [\n    "prompt" => "${apiTestPrompt}",\n    "systemInstruction" => "${apiSystemInstruction.replace(/"/g, '\\"')}",\n    "responseMimeType" => "${apiMimeType}"\n];\n\n$ch = curl_init($url);\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\ncurl_setopt($ch, CURLOPT_POST, true);\ncurl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));\ncurl_setopt($ch, CURLOPT_HTTPHEADER, $headers);\n\n$response = curl_exec($ch);\ncurl_close($ch);\n\necho $response;\n?>`;
+                                    }
+                                    
+                                    navigator.clipboard.writeText(copyText);
+                                    setApiCopiedSnippet(true);
+                                    setTimeout(() => setApiCopiedSnippet(false), 2000);
+                                    toast.success("Kode integrasi berhasil disalin!");
+                                 }}
+                                 className="h-10 px-4 bg-primary text-white text-[10px] font-black uppercase tracking-wider rounded-xl hover:bg-primary/90 flex gap-2 cursor-pointer shadow-lg animate-none"
+                              >
+                                 {apiCopiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                                 {apiCopiedSnippet ? "SALIN BERHASIL!" : "SALIN KODE"}
+                              </Button>
+                           </div>
+                        </CardContent>
+                     </Card>
+
+                     {/* Interactive Testing Sandbox Panel */}
+                     <Card className="rounded-[2.5rem] border-slate-800 bg-slate-900 text-white shadow-2xl overflow-hidden">
+                        <CardHeader className="p-8 bg-slate-950 border-b border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                           <div className="flex items-center gap-3">
+                              <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+                              <div>
+                                 <CardTitle className="text-sm font-black uppercase tracking-widest text-[#bae6fd]">Live API Tester Sandbox</CardTitle>
+                                 <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Uji coba langsung pengiriman payload secara real-time</p>
+                              </div>
+                           </div>
+                        </CardHeader>
+                        <CardContent className="p-8 space-y-6">
+                           
+                           <div className="space-y-2">
+                              <label className="text-[9.5px] font-black uppercase tracking-widest text-slate-400 block">
+                                 Nilai Input Prompt Pengguna (Body Parameter 'prompt')
+                              </label>
+                              <Input
+                                 value={apiTestPrompt}
+                                 onChange={(e) => setApiTestPrompt(e.target.value)}
+                                 placeholder="Berikan input pengujian di sini..."
+                                 className="h-14 bg-slate-950 border-white/10 text-white rounded-xl text-xs font-semibold focus-visible:ring-primary focus-visible:ring-offset-0"
+                              />
+                           </div>
+
+                           <Button
+                              onClick={handleTestApi}
+                              disabled={apiTesting}
+                              className="w-full h-14 bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-[0.2em] shadow-lg shadow-primary/20 flex gap-3 cursor-pointer animate-none"
+                           >
+                              {apiTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
+                              {apiTesting ? "MENGIRIM PAYLOAD KE SERVER..." : "KIRIM REQUEST (UJI API DYNAMIC /v1/execute)"}
+                           </Button>
+
+                           {/* Testing results console block */}
+                           {apiResult && (
+                              <div className="space-y-2">
+                                 <div className="flex justify-between items-center">
+                                    <span className="text-[9px] font-black uppercase tracking-wide text-slate-400 font-mono">CONSOLE RESPONSE SHELL:</span>
+                                    <Button
+                                       variant="ghost"
+                                       size="sm"
+                                       onClick={() => {
+                                          navigator.clipboard.writeText(JSON.stringify(apiResult, null, 2));
+                                          setApiCopiedResponse(true);
+                                          setTimeout(() => setApiCopiedResponse(false), 2000);
+                                          toast.success("Saluran respon API disalin!");
+                                       }}
+                                       className="h-7 text-[8px] font-bold uppercase tracking-wider text-slate-400 hover:text-white border-0"
+                                    >
+                                       {apiCopiedResponse ? "COPIED" : "COPY RAW JSON"}
+                                    </Button>
+                                 </div>
+                                 <div className="bg-black/80 border border-white/5 rounded-2xl p-6 overflow-y-auto max-h-[300px] font-mono text-[10.5px] text-emerald-400 text-left">
+                                    <pre className="whitespace-pre-wrap">{JSON.stringify(apiResult, null, 2)}</pre>
+                                 </div>
+                              </div>
+                           )}
+
                         </CardContent>
                      </Card>
                   </motion.div>

@@ -38,17 +38,35 @@ export default function NicheStep({ project, onSave, onSaveProject }: any) {
   const handlePercayakanPadaAI = async () => {
     setLoading(true);
     try {
+      const activeInputs = {
+        country: formData.country,
+        age: formData.age,
+        interest: formData.interest,
+        skill: formData.skill,
+        goal: formData.goal,
+        budget: formData.budget,
+        traffic: formData.traffic,
+        extraContext: formData.extraContext
+      };
+
       const prompt = `
-        Berdasarkan nama proyek kami: "${project?.name || 'Bisnis Baru'}", hasilkan data input form yang ideal dan realistis untuk memulai riset ceruk pasar (Niche). 
+        Berdasarkan nama proyek kami: "${project?.name || 'Bisnis Baru'}", hasilkan data input form yang ideal dan realistis untuk memulai riset ceruk pasar (Niche) PRODUK DIGITAL (seperti E-book, Online Course, Canva Templates, Solusi SaaS, Excel/Google Sheets Spreadsheet Premium, Keanggotaan/Membership, Template Notion, atau File Desain Kreatif) ber-margin tinggi tanpa melibatkan pengiriman fisik (no physical products).
+
+        PENTING: Pengguna telah mengisi sebagian atau seluruh nilai formulir saat ini sebagai berikut:
+        ${JSON.stringify(activeInputs)}
+
+        Silakan periksa nilai-nilai di atas. Jika ada nilai yang diisi (tidak kosong, atau berbeda dari default kosong), Anda HARUS memprioritaskan dan melestarikannya (keep atau sempurnakan dan jangan menghilangkannya). Lengkapi kolom yang kosong atau bernilai default dengan rekomendasi cerdas yang sangat selaras, harmonis, dan mendukung isian pengguna yang sudah ada tersebut agar riset produk digitalnya sukses.
+
         Kembalikan data dalam format JSON persis seperti berikut:
         {
-          "country": "Indonesia",
-          "age": "18-35 tahun",
-          "interest": "[Nama minat ceruk produk fisik/digital yang sangat subur, spesifik, dan mudah diiklankan]",
-          "skill": "[Keahlian praktis penunjang seperti pembuatan video pendek, copywriting, customer service]",
-          "goal": "Rp 15.000.000 / bulan",
-          "traffic": "Ads",
-          "extraContext": "[Konteks penjelas tambahan yang intuitif bagi pemula untuk langsung sukses]"
+          "country": "[Negara target, gunakan isian pengguna jika ada]",
+          "age": "[Target umur, gunakan isian pengguna jika ada]",
+          "interest": "[Nama topik ceruk produk DIGITAL spesifik berkonversi tinggi, gunakan/sempurnakan isian pengguna jika ada]",
+          "skill": "[Keahlian praktis penunjang pembuatan produk digital, gunakan/sempurnakan isian pengguna jika ada]",
+          "goal": "[Goal penghasilan, gunakan/sempurnakan isian pengguna jika ada]",
+          "budget": "[Pilihan budget: 'Low', 'Medium', atau 'High', gunakan isian pengguna jika ada]",
+          "traffic": "[Pilihan trafik, misal: 'Organic', 'Ads', 'JV', gunakan isian pengguna jika ada]",
+          "extraContext": "[Konteks penjelas tambahan tentang produk digital, gunakan/sempurnakan isian pengguna jika ada]"
         }
         Pastikan merespon HANYA dengan JSON valid, tanpa format pembuka/penutup markdown lain kecuali file JSON-nya sendiri.
       `;
@@ -56,19 +74,20 @@ export default function NicheStep({ project, onSave, onSaveProject }: any) {
       const cleanText = response.text.replace(/```json\n?|```/g, "").trim();
       const data = JSON.parse(cleanText);
       
-      setFormData({
-        country: data.country || "Indonesia",
-        age: data.age || "18-35",
-        interest: data.interest || "",
-        skill: data.skill || "",
-        goal: data.goal || "",
-        traffic: data.traffic || "Ads",
-        extraContext: data.extraContext || ""
-      });
-      toast.success("AI berhasil menyusun draf input form ceruk pasar Anda!");
+      setFormData(prev => ({
+        country: data.country || prev.country || "Indonesia",
+        age: data.age || prev.age || "18-45",
+        interest: data.interest || prev.interest || "",
+        skill: data.skill || prev.skill || "",
+        goal: data.goal || prev.goal || "",
+        budget: data.budget || prev.budget || "Low",
+        traffic: data.traffic || prev.traffic || "Organic",
+        extraContext: data.extraContext || prev.extraContext || ""
+      }));
+      toast.success("AI berhasil menganalisis dan menyempurnakan draf input form Anda!");
     } catch (err) {
       console.error(err);
-      toast.error("Gagal mengisi form secara otomatis. Silakan coba lagi.");
+      toast.error("Gagal melengkapi form secara otomatis. Silakan coba lagi.");
     } finally {
       setLoading(false);
     }
@@ -89,7 +108,7 @@ export default function NicheStep({ project, onSave, onSaveProject }: any) {
 
       const response = await generateAIContent(
         context,
-        AGENT_PROMPTS.STEP_1_NICHE + " Use Indonesian language for descriptions. Respond ONLY with the requested JSON format."
+        AGENT_PROMPTS.STEP_1_NICHE + " PENTING: Fokuskan rekomendasi ini sepenuhnya pada produk digital (seperti e-book, panduan praktis, premium templates, software, spreadsheet, e-course, dsb), bukan produk fisik. Use Indonesian language for descriptions. Respond ONLY with the requested JSON format."
       );
       
       const cleanText = response.text.replace(/```json\n?|```/g, "").trim();

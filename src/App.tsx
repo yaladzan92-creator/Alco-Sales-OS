@@ -14,6 +14,7 @@ import RebrandingPanel from "@/pages/RebrandingPanel";
 import { Toaster } from "@/components/ui/sonner";
 import { BrandingProvider, useBranding } from "@/contexts/BrandingContext";
 import WorkflowWizard from "@/pages/WorkflowWizard";
+import ApiAccess from "@/pages/ApiAccess";
 import { Lock, LogOut, ExternalLink, Zap, Loader2 } from "lucide-react";
 import { getUserConfig, saveUserConfig } from "@/services/aiService";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,6 @@ function AppContent() {
   const [authLoading, setAuthLoading] = React.useState(true);
   const [onboardingStatus, setOnboardingStatus] = React.useState<{ complete: boolean; loading: boolean }>({ complete: true, loading: false });
   const { config, loading: brandingLoading } = useBranding();
-  const [showFullscreenOverlay, setShowFullscreenOverlay] = React.useState(false);
 
   // States for client-managed mandatory API key onboarding validation
   const [keyInput, setKeyInput] = React.useState("");
@@ -100,38 +100,6 @@ function AppContent() {
     };
   }, [user]);
 
-  // Block unauthorized browser exit actions & navigation commands (Lock within session)
-  React.useEffect(() => {
-    if (!user) return;
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!(window as any).alco_is_exiting) {
-        e.preventDefault();
-        e.returnValue = "Sesi APK Aktif. Silakan gunakan tombol Keluar Aplikasi di sidebar untuk menutup.";
-        return e.returnValue;
-      }
-    };
-
-    // Push state and listen to popstate to intercept back/forward events
-    window.history.pushState(null, "", window.location.href);
-    const handlePopState = () => {
-      if (!(window as any).alco_is_exiting) {
-        window.history.pushState(null, "", window.location.href);
-        // Dispatch custom global event or trigger standard alert/toast warning
-        const event = new CustomEvent("alco_unauthorized_navigation_popup");
-        window.dispatchEvent(event);
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("popstate", handlePopState);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, [user]);
-
 
 
   if (authLoading || brandingLoading || onboardingStatus.loading) return <div className="h-screen w-full flex flex-col items-center justify-center bg-background text-foreground font-heading" id="loading-spinner">
@@ -154,6 +122,7 @@ function AppContent() {
         <main className="flex-1 overflow-y-auto bg-background/50">
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/api-access" element={<ApiAccess />} />
             <Route path="/wizard/:projectId" element={<WorkflowWizard />} />
             <Route path="/developer" element={<DeveloperPanel />} />
             <Route path="/rebrand" element={<RebrandingPanel />} />

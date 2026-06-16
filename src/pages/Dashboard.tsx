@@ -129,6 +129,8 @@ export default function Dashboard() {
   const [selectedProjectIds, setSelectedProjectIds] = React.useState<string[]>([]);
   const [bulkDeleteStep, setBulkDeleteStep] = React.useState<0 | 1 | 2>(0);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
+  const [contentWizardOpen, setContentWizardOpen] = React.useState(false);
+  const [contentWizardProjectId, setContentWizardProjectId] = React.useState<string>("");
 
   const toggleProjectSelection = (projectId: string) => {
     setSelectedProjectIds(prev => {
@@ -213,6 +215,87 @@ export default function Dashboard() {
     }
   };
 
+  const buildContentEnginePayload = (project: any) => {
+    const bi = project.brandIntelligence || {};
+    const brandIdentity = bi.brandIdentity || {};
+    const audience = bi.audience || {};
+    const positioning = bi.positioning || {};
+    const offers = Array.isArray(bi.offers) ? bi.offers : [];
+    const messaging = bi.messaging || {};
+    const contentStrategy = bi.contentStrategy || {};
+
+    return {
+      nicheData: {
+        brandName: brandIdentity.brandName || project.brandFoundationData?.brandName || project.name || "Brand Baru",
+        niche: brandIdentity.niche || project.nicheData?.selectedOption?.name || "Niche Bisnis",
+        mission: brandIdentity.mission || positioning.corePromise || project.positioningData?.selectedPositioning?.statement || "Membantu audience mendapatkan hasil yang mereka inginkan.",
+      },
+      audienceData: {
+        segments: [
+          audience.primaryAudience,
+          audience.secondaryAudience,
+          project.audienceData?.selectedSegment?.name,
+        ].filter(Boolean),
+        painPoints: audience.painPoints || project.painPointData?.selectedPainPoints || [],
+        desires: audience.desires || audience.emotionalTriggers || contentStrategy.contentAngles || [],
+      },
+      positioningData: {
+        corePromise: positioning.corePromise || project.positioningData?.selectedPositioning?.statement || "Solusi yang jelas dan relevan untuk audience.",
+        tagline: positioning.tagline || brandIdentity.tagline || project.brandFoundationData?.tagline || "Solusi Praktis",
+        differentiation: positioning.differentiation || brandIdentity.brandValues || [],
+      },
+      offerData: {
+        name: offers[0]?.name || project.offerData?.selectedOffer?.name || "Penawaran Utama",
+        benefits: offers[0]?.benefits || project.offerData?.selectedOffer?.benefits || [],
+        price: offers[0]?.price || project.offerData?.selectedOffer?.price || "Hubungi Kami",
+        ctaText: offers[0]?.ctaText || messaging.primaryCta || "Mulai Sekarang",
+      },
+      copyDirection: {
+        voice: messaging.toneOfVoice?.style || project.copyDirection?.voice || "Edukasi bersahabat",
+        tone: messaging.toneOfVoice?.tone || project.copyDirection?.tone || "Empatik dan jelas",
+        doRules: messaging.copyGuidelines || project.copyDirection?.doRules || [],
+        dontRules: messaging.avoidRules || project.copyDirection?.dontRules || [],
+      },
+    };
+  };
+
+  const encodeHandoffPayload = (payload: any) => {
+    const json = JSON.stringify(payload);
+    const bytes = new TextEncoder().encode(json);
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+  };
+
+  const openContentEngine = (project: any) => {
+    try {
+      const payload = buildContentEnginePayload(project);
+      const handoff = encodeHandoffPayload(payload);
+      const metaObj: any = import.meta;
+      const baseUrl =
+        localStorage.getItem("alco_content_engine_url") ||
+        metaObj.env?.VITE_ALCO_CONTENT_ENGINE_URL ||
+        "http://localhost:3001/dashboard";
+
+      const separator = baseUrl.includes("?") ? "&" : "?";
+      window.open(`${baseUrl}${separator}handoff=${encodeURIComponent(handoff)}&source=creative-system`, "_blank");
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal membuka ALCO Content Engine untuk project ini.");
+    }
+  };
+
+  const openContentEngineWizard = (project?: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const firstReadyProject = projects.find((item) => !!item.brandFoundationData || item.currentStep >= 10);
+    setContentWizardProjectId(project?.id || firstReadyProject?.id || projects[0]?.id || "");
+    setContentWizardOpen(true);
+  };
+
+  const selectedContentWizardProject = projects.find((project) => project.id === contentWizardProjectId);
+
   const handleExportSelectedProjects = () => {
     if (selectedProjectIds.length === 0) {
       toast.error("Silakan pilih minimal satu proyek untuk di-ekspor.");
@@ -231,9 +314,9 @@ export default function Dashboard() {
       downloadAnchor.setAttribute("href", jsonString);
       
       const filename = selectedProjectsList.length === 1 
-        ? `${selectedProjectsList[0].name.toLowerCase().replace(/\s+/g, "_")}_progress.json`
-        : `alco_export_bundle_${selectedProjectsList.length}_projects.json`;
-        
+         ? `${selectedProjectsList[0].name.toLowerCase().replace(/\s+/g, "_")}_progress.json`
+         : `alco_export_bundle_${selectedProjectsList.length}_projects.json`;
+         
       downloadAnchor.setAttribute("download", filename);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
@@ -297,7 +380,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.uid]);
 
   React.useEffect(() => {
     // Show welcome toast about API Key
@@ -742,7 +825,7 @@ export default function Dashboard() {
               <div className="space-y-0.5">
                 <span className="text-[8.5px] font-black uppercase tracking-wider text-primary block">💡 Kiat Sukses Menggunakan Asisten:</span>
                 <p className="text-xs text-muted-foreground leading-relaxed font-semibold">
-                  Belum punya ide produk digital? Tenang! Cukup klik salah satu <strong className="text-foreground font-bold">Template Contoh Premium (Templet)</strong> di bawah ini, klik ikon <strong className="text-indigo-600 font-bold">Remix / Klon Proyek</strong> untuk menduplikatnya, dan pelajari format suksesnya seketika!
+                  Belum punya ide produk digital? Tenang! Cukup klik salah satu <strong className="text-foreground font-bold">Template Contoh Premium (Templet)</strong> di bawah ini, klik ikon <strong className="text-indigo-600 font-bold">Remix / Klon Proyek</strong> untuk menduplikatnya, and pelajari format suksesnya seketika!
                 </p>
               </div>
             </div>
@@ -1052,6 +1135,18 @@ export default function Dashboard() {
                               Ads
                             </Button>
                           </div>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!isBrandDone}
+                            onClick={(e) => openContentEngineWizard(project, e)}
+                            className="h-10 w-full text-[8px] font-black uppercase tracking-widest border-sky-500/25 text-sky-700 bg-sky-500/5 hover:bg-sky-500 hover:text-white transition-all"
+                            title="Pilih project untuk ALCO Content Engine"
+                          >
+                            Content Engine
+                            <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
+                          </Button>
                         </>
                       );
                     })()}
@@ -1111,6 +1206,140 @@ export default function Dashboard() {
          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground mb-1">{config.footerText}</p>
          <p className="text-[8px] font-bold text-muted-foreground/40">{config.companyName} &copy; {new Date().getFullYear()}</p>
       </footer>
+
+      {contentWizardOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.98 }}
+            className="w-full max-w-4xl bg-card border border-border rounded-[2rem] shadow-2xl overflow-hidden text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 md:p-8 border-b border-border flex items-start justify-between gap-4">
+              <div>
+                <span className="inline-flex items-center gap-2 rounded-full bg-sky-500/10 border border-sky-500/20 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-sky-600">
+                  <Zap className="w-3.5 h-3.5" />
+                  Content Engine Wizard
+                </span>
+                <h2 className="mt-3 text-2xl font-heading font-black tracking-tight text-foreground">
+                  Pilih project untuk dibuatkan konten
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground font-semibold leading-relaxed max-w-2xl">
+                  Project yang dipilih akan dikirim otomatis ke ALCO Content Engine. User tidak perlu upload file JSON ulang.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setContentWizardOpen(false)}
+                className="w-10 h-10 rounded-xl bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+                title="Tutup wizard"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_0.8fr] gap-0">
+              <div className="p-5 md:p-6 border-b lg:border-b-0 lg:border-r border-border max-h-[520px] overflow-y-auto space-y-3">
+                {projects.length === 0 ? (
+                  <div className="p-8 text-center rounded-2xl border border-dashed border-border text-muted-foreground text-sm">
+                    Belum ada project yang tersedia.
+                  </div>
+                ) : (
+                  projects.map((project) => {
+                    const isReady = !!project.brandFoundationData || project.currentStep >= 10;
+                    const selected = project.id === contentWizardProjectId;
+                    return (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => setContentWizardProjectId(project.id)}
+                        className={cn(
+                          "w-full p-4 rounded-2xl border text-left transition-all",
+                          selected
+                            ? "border-sky-500/40 bg-sky-500/10 shadow-sm"
+                            : "border-border bg-secondary/20 hover:bg-secondary/40",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-black text-foreground truncate">{project.name}</h3>
+                            <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground truncate">
+                              {project.nicheData?.selectedOption?.name || "Digital Asset Pipeline"}
+                            </p>
+                          </div>
+                          <span className={cn(
+                            "shrink-0 rounded-full border px-2 py-1 text-[8px] font-black uppercase tracking-wider",
+                            isReady
+                              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                              : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                          )}>
+                            {isReady ? "Siap" : "Belum lengkap"}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                          {project.brandFoundationData?.brandName || project.brandIntelligence?.brandIdentity?.brandName || project.name} akan dipakai sebagai dasar audience, pain point, desire, positioning, offer, dan brand voice.
+                        </p>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="p-6 md:p-8 space-y-5 bg-secondary/20">
+                <div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                    Project Terpilih
+                  </span>
+                  <h3 className="mt-2 text-xl font-heading font-black text-foreground">
+                    {selectedContentWizardProject?.name || "Pilih project"}
+                  </h3>
+                  <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                    Setelah lanjut, Content Engine akan langsung membuka project ini, menjalankan analisis, lalu user bisa membuat kalender konten tanpa upload ulang.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-[10px] font-black uppercase tracking-wider">
+                  <div className="rounded-2xl border border-border bg-card p-3">
+                    <span className="block text-muted-foreground">Strategy</span>
+                    <span className="mt-1 block text-primary">{Math.min(Math.max(selectedContentWizardProject?.currentStep || 1, 1), 9)}/9</span>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-card p-3">
+                    <span className="block text-muted-foreground">Brand</span>
+                    <span className={cn("mt-1 block", selectedContentWizardProject?.brandFoundationData || (selectedContentWizardProject?.currentStep || 1) >= 10 ? "text-emerald-600" : "text-amber-600")}>
+                      {selectedContentWizardProject?.brandFoundationData || (selectedContentWizardProject?.currentStep || 1) >= 10 ? "Siap" : "Belum"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed font-semibold">
+                    Data yang dikirim hanya ringkasan project untuk kebutuhan konten: audience, pain point, desire, positioning, offer, brand voice, dan marketing angle.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setContentWizardOpen(false)}
+                    className="h-12 rounded-xl font-black uppercase tracking-widest text-[10px]"
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    disabled={!selectedContentWizardProject}
+                    onClick={() => selectedContentWizardProject && openContentEngine(selectedContentWizardProject)}
+                    className="h-12 flex-1 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black uppercase tracking-widest text-[10px] gap-2"
+                  >
+                    Buka Content Engine
+                    <ArrowUpRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Immersive Remix Step Wizard Dialog */}
       {remixingProject && (
@@ -1280,5 +1509,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-

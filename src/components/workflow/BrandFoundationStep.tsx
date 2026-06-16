@@ -111,6 +111,18 @@ export default function BrandFoundationStep({ project, onSave, onSaveProject }: 
   const handlePercayakanPadaAI = async () => {
     setLoading(true);
     try {
+      const activeInputs = {
+        brandName: formData.brandName,
+        brandPersonality: formData.brandPersonality,
+        communicationStyle: formData.communicationStyle,
+        visualDirection: formData.visualDirection,
+        colors: formData.colors,
+        brandFeel: formData.brandFeel,
+        companyName: formData.companyName,
+        collaborations: formData.collaborations,
+        advertiserFigure: formData.advertiserFigure
+      };
+
       const prompt = `
         Berdasarkan seluruh data strategi pemasaran yang telah dibuat sebelumnya:
         - Niche Pasar: ${JSON.stringify(project?.nicheData?.selectedOption || project?.nicheData?.input || {})}
@@ -119,19 +131,26 @@ export default function BrandFoundationStep({ project, onSave, onSaveProject }: 
         - Positioning: ${JSON.stringify(project?.positioningData?.selectedOption || {})}
         - Paket Penawaran: ${JSON.stringify(project?.offerData?.selectedOption || {})}
         
-        Tolong rancang identitas Brand Foundation yang paling selaras, profesional, dan berkonversi tinggi untuk menjalankan Meta/Google Ads.
+        PENTING: Pengguna telah mengisi sebagian atau seluruh nilai formulir Brand Foundation saat ini sebagai berikut:
+        ${JSON.stringify(activeInputs)}
+
+        Silakan periksa nilai-nilai di atas. Jika ada nilai yang diisi oleh pengguna (termasuk isian kustom seperti brandName, companyName, collaborations, advertiserFigure, brandFeel, dsb yang tidak kosong), Anda HARUS menggunakan nilai tersebut sebagai prioritas utama dan me-rekomendasikan pelengkap kolom lain agar selaras dan menguatkan isian pengguna yang sudah ada tersebut.
+
         Format kembalian HARUS berupa JSON valid dengan struktur persis seperti berikut:
         {
-          "brandName": "[Beri saran nama brand/produk yang memikat, pendek, eye-catchy]",
+          "brandName": "[Beri saran nama brand/produk yang memikat, gunakan/sempurnakan isian pengguna jika ada]",
           "brandPersonality": ["Modern", "Professional"],
           "communicationStyle": ["Direct Response", "Empathetic"],
-          "visualDirection": "[Minta satu dari: 'Minimal SaaS', 'Warm Human', 'Modern Tech', 'Clean Corporate', 'Luxury Minimal', 'UGC Social']",
+          "visualDirection": "[Minta satu dari: 'Minimal SaaS', 'Warm Human', 'Modern Tech', 'Clean Corporate', 'Luxury Minimal', 'UGC Social', gunakan isian pengguna jika ada]",
           "colors": {
             "primary": "#hex_primary_color",
             "secondary": "#hex_secondary_color",
             "accent": "#hex_accent_color"
           },
-          "brandFeel": "[Saran pembawaan emosional yang meluluhkan hati penonton iklan]"
+          "brandFeel": "[Saran pembawaan emosional yang meluluhkan hati penonton, gunakan/sempurnakan isian pengguna jika ada]",
+          "companyName": "[Gunakan/sempurnakan isian pengguna jika ada]",
+          "collaborations": "[Gunakan/sempurnakan isian pengguna jika ada]",
+          "advertiserFigure": "[Gunakan/sempurnakan isian pengguna jika ada]"
         }
         PENTING:
         - brandPersonality harus berupa array string (pilih 1-3 dari: 'Calm', 'Friendly', 'Premium', 'Practical', 'Modern', 'Bold', 'Minimal', 'Professional')
@@ -145,27 +164,27 @@ export default function BrandFoundationStep({ project, onSave, onSaveProject }: 
       const data = JSON.parse(cleanText);
       
       const updatedData = {
-        brandName: data.brandName || project?.name || "",
-        brandPersonality: data.brandPersonality || ["Modern", "Professional"],
-        communicationStyle: data.communicationStyle || ["Direct Response", "Empathetic"],
-        visualDirection: data.visualDirection || "Modern Tech",
-        colors: data.colors || {
-          primary: "#2563eb",
-          secondary: "#f1f5f9",
-          accent: "#f59e0b"
-        },
-        brandFeel: data.brandFeel || "",
-        companyName: formData.companyName || "",
-        collaborations: formData.collaborations || "",
-        advertiserFigure: formData.advertiserFigure || ""
+         brandName: data.brandName || formData.brandName || project?.name || "",
+         brandPersonality: data.brandPersonality || formData.brandPersonality || ["Modern", "Professional"],
+         communicationStyle: data.communicationStyle || formData.communicationStyle || ["Direct Response", "Empathetic"],
+         visualDirection: data.visualDirection || formData.visualDirection || "Modern Tech",
+         colors: data.colors || formData.colors || {
+           primary: "#2563eb",
+           secondary: "#f1f5f9",
+           accent: "#f59e0b"
+         },
+         brandFeel: data.brandFeel || formData.brandFeel || "",
+         companyName: data.companyName || formData.companyName || "",
+         collaborations: data.collaborations || formData.collaborations || "",
+         advertiserFigure: data.advertiserFigure || formData.advertiserFigure || ""
       };
 
       setFormData(updatedData);
       onSave(updatedData, false);
-      toast.success("AI berhasil menyelaraskan pondasi brand terbaik untuk strategi ads Anda!");
+      toast.success("AI berhasil menyelaraskan dan melengkapi pondasi brand terbaik untuk strategi ads Anda!");
     } catch (err) {
       console.error(err);
-      toast.error("Gagal melakukan otomatisasi pondasi brand. Silakan coba lagi.");
+      toast.error("Gagal melengkapi pondasi brand. Silakan coba lagi.");
     } finally {
       setLoading(false);
     }
