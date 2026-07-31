@@ -17,7 +17,6 @@ import { generateAIContent, AGENT_PROMPTS } from "@/services/aiService";
 import { toast } from "sonner";
 import { useBranding } from "@/contexts/BrandingContext";
 import { mergeWorkflowResult, exportBrandIntelligence } from "../../services/brandIntelligence";
-import DocumentationEngineView from "./DocumentationEngineView";
 
 interface SummaryStepProps {
   project: any;
@@ -29,7 +28,6 @@ export default function SummaryStep({ project, onSave, onNext }: SummaryStepProp
   const { config } = useBranding();
   const [loading, setLoading] = React.useState(false);
   const [summary, setSummary] = React.useState<any>(project?.summaryData || null);
-  const [viewTab, setViewTab] = React.useState<"summary" | "doc_engine">("doc_engine");
 
   const renderValue = (val: any): string => {
     if (val === null || val === undefined) return "";
@@ -230,55 +228,31 @@ export default function SummaryStep({ project, onSave, onNext }: SummaryStepProp
         </Button>
       </div>
 
-      {/* View Switcher Tabs */}
-      <div className="flex items-center gap-3 bg-secondary/50 p-1.5 rounded-2xl border border-border w-fit">
-        <Button
-          variant={viewTab === "doc_engine" ? "default" : "ghost"}
-          onClick={() => setViewTab("doc_engine")}
-          className="rounded-xl h-10 px-5 font-black uppercase text-[10px] tracking-wider gap-2 cursor-pointer"
-        >
-          <Sparkles className="w-4 h-4 text-amber-300" />
-          Documentation Engine (7 Structure Pack)
-        </Button>
-        <Button
-          variant={viewTab === "summary" ? "default" : "ghost"}
-          onClick={() => setViewTab("summary")}
-          className="rounded-xl h-10 px-5 font-black uppercase text-[10px] tracking-wider gap-2 cursor-pointer"
-        >
-          <ClipboardList className="w-4 h-4 text-cyan-500" />
-          Executive Strategy Summary
-        </Button>
+      <div className="flex flex-col lg:flex-row gap-4 justify-between lg:items-center">
+        <div className="flex items-center gap-4">
+           <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+              <ClipboardList className="w-6 h-6 text-cyan-500" />
+           </div>
+           <div className="text-left">
+              <h2 className="text-2xl font-heading font-black tracking-tight text-foreground uppercase italic underline decoration-cyan-500 decoration-4 underline-offset-8">Project Strategy Summary</h2>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">Foundational Intelligence for {project.name}</p>
+           </div>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+           <Button onClick={exportBrandIntelligenceData} size="sm" className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl h-10 gap-2 uppercase font-black text-[9px] tracking-wider shadow-md shadow-indigo-500/20 cursor-pointer">
+              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> Export Brand Intelligence
+           </Button>
+           <Button variant="outline" size="sm" onClick={exportAsJSON} className="rounded-xl h-10 gap-2 border-border hover:border-cyan-500/50 uppercase font-black text-[9px] tracking-wider">
+              <FileJson className="w-4 h-4 text-cyan-500" /> Complete Raw JSON
+           </Button>
+           <Button variant="outline" size="sm" onClick={exportAsMarkdown} className="rounded-xl h-10 gap-2 border-border hover:border-cyan-500/50 uppercase font-black text-[9px] tracking-wider">
+              <FileText className="w-4 h-4 text-blue-500" /> Download Markdown (.MD)
+           </Button>
+           <Button onClick={handleCopyAction} className="bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl h-10 gap-2 uppercase font-black text-[9px] tracking-widest">
+              <Download className="w-4 h-4" /> {promptCopied ? "Tersalin!" : "Download / Salin Semua"}
+           </Button>
+        </div>
       </div>
-
-      {viewTab === "doc_engine" ? (
-        <DocumentationEngineView project={project} />
-      ) : (
-        <>
-          <div className="flex flex-col lg:flex-row gap-4 justify-between lg:items-center">
-            <div className="flex items-center gap-4">
-               <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
-                  <ClipboardList className="w-6 h-6 text-cyan-500" />
-               </div>
-               <div className="text-left">
-                  <h2 className="text-2xl font-heading font-black tracking-tight text-foreground uppercase italic underline decoration-cyan-500 decoration-4 underline-offset-8">Project Strategy Summary</h2>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">Foundational Intelligence for {project.name}</p>
-               </div>
-            </div>
-            <div className="flex flex-wrap gap-2.5">
-               <Button onClick={exportBrandIntelligenceData} size="sm" className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl h-10 gap-2 uppercase font-black text-[9px] tracking-wider shadow-md shadow-indigo-500/20 cursor-pointer">
-                  <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> Export Brand Intelligence
-               </Button>
-               <Button variant="outline" size="sm" onClick={exportAsJSON} className="rounded-xl h-10 gap-2 border-border hover:border-cyan-500/50 uppercase font-black text-[9px] tracking-wider">
-                  <FileJson className="w-4 h-4 text-cyan-500" /> Complete Raw JSON
-               </Button>
-               <Button variant="outline" size="sm" onClick={exportAsMarkdown} className="rounded-xl h-10 gap-2 border-border hover:border-cyan-500/50 uppercase font-black text-[9px] tracking-wider">
-                  <FileText className="w-4 h-4 text-blue-500" /> Download Markdown (.MD)
-               </Button>
-               <Button onClick={handleCopyAction} className="bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl h-10 gap-2 uppercase font-black text-[9px] tracking-widest">
-                  <Download className="w-4 h-4" /> {promptCopied ? "Tersalin!" : "Download / Salin Semua"}
-               </Button>
-            </div>
-          </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="rounded-[2.5rem] border-border shadow-xl hover:shadow-2xl transition-all border-l-8 border-l-blue-500">
@@ -412,8 +386,6 @@ export default function SummaryStep({ project, onSave, onNext }: SummaryStepProp
           <RefreshCcw className="w-4 h-4" /> Regenerate Strategy Summary
         </Button>
       </div>
-        </>
-      )}
     </div>
   );
 }
